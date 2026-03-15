@@ -1,0 +1,86 @@
+{
+  "payload": {
+    "export": "cart-lines-discounts-generate-run",
+    "target": "cart.lines.discounts.generate.run",
+    "input": {
+      "cart": {
+        "lines": [
+          {
+            "id": "gid://shopify/CartLine/0",
+            "quantity": 1,
+            "cost": {
+              "amountPerQuantity": {
+                "amount": "35.00"
+              }
+            },
+            "merchandise": {
+              "__typename": "ProductVariant",
+              "id": "gid://shopify/ProductVariant/1",
+              "product": {
+                "id": "gid://shopify/Product/1",
+                "patchType": { "value": "Embroidery" },
+                "priceChart": {
+                  "value": "[{\"tab_key\":{\"value\":\"embroidery\"},\"title\":{\"value\":\"Embroidery Pricing\"},\"quantity_labels\":{\"value\":[\"1+\",\"2+\",\"6+\",\"12+\"]},\"price_values\":{\"value\":[\"$35.00\",\"$30.00\",\"$25.00\",\"$19.25\"]}}]"
+                }
+              },
+              "selectedOptions": [
+                { "name": "Color", "value": "Black" }
+              ]
+            }
+          },
+          {
+            "id": "gid://shopify/CartLine/1",
+            "quantity": 2,
+            "cost": {
+              "amountPerQuantity": {
+                "amount": "35.00"
+              }
+            },
+            "merchandise": {
+              "__typename": "ProductVariant",
+              "id": "gid://shopify/ProductVariant/2",
+              "product": {
+                "id": "gid://shopify/Product/1",
+                "patchType": { "value": "Embroidery" },
+                "priceChart": {
+                  "value": "[{\"tab_key\":{\"value\":\"embroidery\"},\"title\":{\"value\":\"Embroidery Pricing\"},\"quantity_labels\":{\"value\":[\"1+\",\"2+\",\"6+\",\"12+\"]},\"price_values\":{\"value\":[\"$35.00\",\"$30.00\",\"$25.00\",\"$19.25\"]}}]"
+                }
+              },
+              "selectedOptions": [
+                { "name": "Color", "value": "Grey" }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "inputBytes": 800,
+    "output": {
+      "operations": [
+        {
+          "productDiscountsAdd": {
+            "candidates": [
+              {
+                "message": "Tier Pricing",
+                "targets": [
+                  {
+                    "cartLine": {
+                      "id": "gid://shopify/CartLine/1"
+                    }
+                  }
+                ],
+                "value": {
+                  "fixedAmount": {
+                    "amount": "5.00",
+                    "appliesToEachItem": true
+                  }
+                }
+              }
+            ],
+            "selectionStrategy": "ALL"
+          }
+        }
+      ]
+    }
+  }
+}

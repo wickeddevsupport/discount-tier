@@ -1,0 +1,29 @@
+query CartInput {
+  cart {
+    lines {
+      id
+      quantity
+      cost {
+        amountPerQuantity {
+          amount
+        }
+      }
+      merchandise {
+        ... on ProductVariant {
+          id
+          title
+          product {
+            id
+            patchType: metafield(namespace: "custom", key: "patch_type") {
+              value
+            }
+            priceChart: metafield(namespace: "custom", key: "price_chart_tiers") {
+              value
+            }
+          }
+
+        }
+      }
+    }
+  }
+}

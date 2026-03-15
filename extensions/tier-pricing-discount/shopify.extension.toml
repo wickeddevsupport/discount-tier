@@ -1,0 +1,22 @@
+api_version = "2026-01"
+
+[[extensions]]
+name = "t:name"
+handle = "tier-pricing-discount"
+type = "function"
+uid = "7ecfb76a-30df-8559-f216-fb5ceda8e0d15480fff5"
+description = "t:description"
+
+  [[extensions.targeting]]
+  target = "cart.lines.discounts.generate.run"
+  input_query = "src/cart_lines_discounts_generate_run.graphql"
+  export = "cart-lines-discounts-generate-run"
+
+  [[extensions.targeting]]
+  target = "cart.delivery-options.discounts.generate.run"
+  input_query = "src/cart_delivery_options_discounts_generate_run.graphql"
+  export = "cart-delivery-options-discounts-generate-run"
+
+  [extensions.build]
+  command = ""
+  path = "dist/function.wasm"
