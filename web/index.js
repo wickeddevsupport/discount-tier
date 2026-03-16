@@ -7,7 +7,7 @@ const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || `http://localhost:${PORT}`;
 const CLIENT_ID = process.env.SHOPIFY_API_KEY || "ea37327071079a155fbdd95f4fc71022";
 const CLIENT_SECRET = process.env.SHOPIFY_API_SECRET || "";
-const SCOPES = "write_discounts,read_discounts";
+const SCOPES = "write_discounts,read_discounts,read_products,write_products,read_metaobjects";
 const API_VERSION = "2026-01";
 
 // In-memory token store (use a DB for production)
@@ -117,7 +117,7 @@ app.get("/callback", async (req, res) => {
   }
 
   console.log(`✅ Discount created: ${discount?.discountId}`);
-  res.send(`<h2>✅ App installed successfully on ${shop}</h2><p>Tier Pricing automatic discount is now active.</p><p>Discount ID: ${discount?.discountId}</p>`);
+  res.send(`<h2>✅ App installed successfully on ${shop}</h2><p>Tier Pricing automatic discount is now active.</p><p>Discount ID: ${discount?.discountId}</p><p><strong>Access Token (save this for migration script):</strong> ${token}</p>`);
 });
 
 app.listen(PORT, () => {
