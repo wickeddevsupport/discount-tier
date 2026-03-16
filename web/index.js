@@ -58,13 +58,19 @@ app.get("/callback", async (req, res) => {
     headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": token },
     body: JSON.stringify({ query: `{ shopifyFunctions(first: 20) { nodes { id title apiType } } }` }),
   });
-  const fnData = await fnRes.json();
+  const fnText = await fnRes.text();
+  let fnData;
+  try {
+    fnData = JSON.parse(fnText);
+  } catch (e) {
+    return res.status(500).send(`Failed to parse functions response: ${fnText.substring(0, 500)}`);
+  }
   const fn = (fnData?.data?.shopifyFunctions?.nodes ?? []).find(
     f => f.title?.toLowerCase().includes("tier") || f.apiType === "discount"
   );
 
   if (!fn) {
-    return res.status(500).send("Function not found. Make sure the app is deployed.");
+    return res.status(500).send(`Function not found. Response: ${JSON.stringify(fnData?.data?.shopifyFunctions?.nodes ?? fnData)}`);
   }
 
   console.log(`✅ Found function: ${fn.title} → ${fn.id}`);
