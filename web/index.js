@@ -42,7 +42,13 @@ app.get("/callback", async (req, res) => {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ client_id: CLIENT_ID, client_secret: CLIENT_SECRET, code }),
   });
-  const tokenData = await tokenRes.json();
+  const tokenText = await tokenRes.text();
+  let tokenData;
+  try {
+    tokenData = JSON.parse(tokenText);
+  } catch (e) {
+    return res.status(500).send(`Token exchange failed: ${tokenText.substring(0, 500)}`);
+  }
   const token = tokenData.access_token;
 
   if (!token) {
