@@ -1,8 +1,8 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-client_id = "b8087fbdfc09c3c4228f3e9eed41e1ed"
+client_id = "ea37327871879a155fbdd95f4fc71822"
 name = "discount-tier"
-application_url = "https://shopify.dev/apps/default-app-home"
+application_url = "https://tier-pricing-discount-production.up.railway.app"
 embedded = true
 
 [build]
@@ -15,4 +15,4 @@ api_version = "2026-04"
 scopes = "write_discounts,read_discounts"
 
 [auth]
-redirect_urls = [ "https://shopify.dev/apps/default-app-home/api/auth" ]
+redirect_urls = [ "https://tier-pricing-discount-production.up.railway.app/api/callback" ]
