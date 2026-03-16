@@ -109,9 +109,8 @@ app.get("/callback", async (req, res) => {
   const discount = discountData?.data?.discountAutomaticAppCreate?.automaticAppDiscount;
 
   if (errors.length) {
-    // Discount might already exist — that's fine
-    if (errors[0]?.message?.toLowerCase().includes("already")) {
-      return res.send(`<h2>✅ App installed on ${shop}</h2><p>Tier Pricing discount already exists.</p>`);
+    if (errors[0]?.message?.toLowerCase().includes("already") || errors[0]?.message?.toLowerCase().includes("unique")) {
+      return res.send(`<h2>✅ App installed on ${shop}</h2><p>Tier Pricing discount already exists.</p><p><strong>Access Token (save for migration script):</strong> ${token}</p>`);
     }
     return res.status(500).send(`<h2>❌ Error creating discount</h2><pre>${JSON.stringify(errors, null, 2)}</pre>`);
   }
