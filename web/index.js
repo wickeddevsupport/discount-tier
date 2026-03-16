@@ -5,7 +5,7 @@ import fetch from "node-fetch";
 const app = express();
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || `http://localhost:${PORT}`;
-const CLIENT_ID = process.env.SHOPIFY_API_KEY || "ea37327871879a155fbdd95f4fc71822";
+const CLIENT_ID = process.env.SHOPIFY_API_KEY || "ea37327071079a155fbdd95f4fc71022";
 const CLIENT_SECRET = process.env.SHOPIFY_API_SECRET || "";
 const SCOPES = "write_discounts,read_discounts";
 const API_VERSION = "2026-01";
