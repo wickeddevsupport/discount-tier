@@ -12,7 +12,10 @@ automatically_update_urls_on_dev = true
 api_version = "2026-04"
 
 [access_scopes]
-scopes = "write_discounts,read_discounts"
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_discounts,read_metaobjects,read_products,write_discounts,write_products"
 
 [auth]
-redirect_urls = [ "https://tier-pricing-discount-production.up.railway.app/api/auth/callback" ]
+redirect_urls = [
+  "https://tier-pricing-discount-production.up.railway.app/callback"
+]

@@ -3,6 +3,12 @@ query CartInput {
     lines {
       id
       quantity
+      attribute(key: "_bundle_id") {
+        value
+      }
+      isAddon: attribute(key: "_is_addon") {
+        value
+      }
       cost {
         amountPerQuantity {
           amount

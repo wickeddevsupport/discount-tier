@@ -104,7 +104,17 @@ export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsG
     const product = variant?.product;
     if (!product) continue;
 
+    // Skip addon lines — they'll have their own discount tier logic later
+    const isAddon = (line as any).isAddon?.value === "true";
+    if (isAddon) continue;
+
     const productId: string = product.id;
+
+    // Use _bundle_id line property to scope tier calculation per bundle,
+    // falling back to productId for non-bundle items
+    const bundleId: string =
+      (line as any).attribute?.value
+      ?? productId;
 
     // Detect patch type from variant title (e.g. "Brown/Khaki / Vegan Leather Patch")
     // Fall back to product metafield, then default to "Embroidery"
@@ -116,7 +126,7 @@ export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsG
       rawPatchType = "Embroidery";
     }
     const patchKey = toPatchKey(rawPatchType);
-    const groupKey = `${productId}__${patchKey}`;
+    const groupKey = `${bundleId}__${patchKey}`;
 
     if (!groups[groupKey]) {
       const allTiers = parsePriceChart(product?.priceChart?.value ?? null);
