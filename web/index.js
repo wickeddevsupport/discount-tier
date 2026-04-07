@@ -169,7 +169,10 @@ app.get("/api/product/:id/tiers", async (req, res) => {
       const charts = Array.isArray(raw) ? raw : [raw];
       parsedTiers = {};
       for (const chart of charts) {
-        const key = String(chart?.tab_key?.value ?? chart?.tab_key ?? "").toLowerCase().trim();
+      const rawKey = String(chart?.tab_key?.value ?? chart?.tab_key ?? "")
+        .toLowerCase().trim().replace(/[\s_]+/g, "-");
+      // Normalise "vegan" → "vegan-leather" to match UI key
+      const key = rawKey === "vegan" ? "vegan-leather" : rawKey;
         const qtys = chart?.quantities ?? chart?.quantity_labels?.value ?? chart?.quantity_labels ?? [];
         const prices = chart?.prices ?? chart?.price_values?.value ?? chart?.price_values ?? [];
         if (!key || !qtys.length) continue;

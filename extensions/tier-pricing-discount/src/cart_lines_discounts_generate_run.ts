@@ -137,11 +137,11 @@ export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsG
     if (!groups[groupKey]) {
       const allTiers = parsePriceChart(product?.priceChart?.value ?? null);
 
-      // Exact match first, then fuzzy
+      // Exact match first, then fuzzy (also handles "vegan" → "vegan-leather")
       let tiers: Tier[] | undefined = allTiers[patchKey];
       if (!tiers) {
         const fallback = Object.keys(allTiers).find(
-          (k) => k.includes(patchKey) || patchKey.includes(k)
+          (k) => k.includes(patchKey) || patchKey.includes(k) || k === "vegan" && patchKey === "vegan-leather"
         );
         if (fallback) tiers = allTiers[fallback];
       }
