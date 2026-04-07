@@ -91,11 +91,17 @@ function toPatchKey(patchType: string): string {
   return patchType.toLowerCase().trim().replace(/\s+/g, "-");
 }
 
+/** Hardcoded addon tiers — same for all 4 addon products */
+const ADDON_TIERS: Tier[] = [
+  { qty: 1,   price: 5.00 },
+  { qty: 48,  price: 4.50 },
+  { qty: 96,  price: 4.00 },
+  { qty: 144, price: 3.50 },
+];
+
 export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsGenerateRunResult {
 
-  // ── 1. Group lines by (productId + patchType) ──────────────────────────────
-  // 1 black + 2 grey of the same patch type on the same product = 3 total
-  // for tier calculation, then each line gets its own discount applied.
+  // ── 1. Group hat lines by (bundleId + patchType) ───────────────────────────
   type Group = { lines: typeof input.cart.lines; tiers: Tier[] };
   const groups: Record<string, Group> = {};
 
@@ -148,7 +154,7 @@ export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsG
     groups[groupKey].lines.push(line);
   }
 
-  // ── 2. Build discount candidates ───────────────────────────────────────────
+  // ── 2. Build hat discount candidates ──────────────────────────────────────
   const candidates: any[] = [];
 
   for (const groupKey in groups) {
@@ -156,6 +162,46 @@ export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsG
 
     const totalQty = lines.reduce((sum, l) => sum + l.quantity, 0);
     const tierPrice = getTierPrice(totalQty, tiers);
+
+    for (const line of lines) {
+      const basePrice = parseFloat((line.cost as any).amountPerQuantity.amount);
+      const discountAmount = basePrice - tierPrice;
+
+      if (discountAmount > 0) {
+        candidates.push({
+          targets: [{ cartLine: { id: line.id } }],
+          value: {
+            fixedAmount: {
+              amount: discountAmount.toFixed(2),
+              appliesToEachItem: true,
+            } satisfies ProductDiscountCandidateFixedAmount,
+          },
+          message: "Tier Pricing",
+        });
+      }
+    }
+  }
+
+  // ── 3. Group addon lines by bundleId + productId, apply addon tiers ─────────
+  const addonGroups: Record<string, typeof input.cart.lines> = {};
+
+  for (const line of input.cart.lines) {
+    const isAddon = (line as any).isAddon?.value === "true";
+    if (!isAddon) continue;
+
+    const variant = line.merchandise as any;
+    const productId: string = variant?.product?.id ?? "unknown";
+    const bundleId: string = (line as any).attribute?.value ?? productId;
+    const addonGroupKey = `${bundleId}__${productId}`;
+
+    if (!addonGroups[addonGroupKey]) addonGroups[addonGroupKey] = [];
+    addonGroups[addonGroupKey].push(line);
+  }
+
+  for (const bundleId in addonGroups) {
+    const lines = addonGroups[bundleId];
+    const totalQty = lines.reduce((sum, l) => sum + l.quantity, 0);
+    const tierPrice = getTierPrice(totalQty, ADDON_TIERS);
 
     for (const line of lines) {
       const basePrice = parseFloat((line.cost as any).amountPerQuantity.amount);

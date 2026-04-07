@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tier Pricing — Products</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f6f6f7; color: #202223; }
+    .topbar { background: #1a1a2e; color: white; padding: 16px 24px; display: flex; align-items: center; gap: 12px; }
+    .topbar h1 { font-size: 18px; font-weight: 600; }
+    .container { max-width: 900px; margin: 32px auto; padding: 0 16px; }
+    .search-bar { display: flex; gap: 10px; margin-bottom: 24px; }
+    .search-bar input { flex: 1; padding: 10px 14px; border: 1px solid #c9cccf; border-radius: 8px; font-size: 14px; outline: none; }
+    .search-bar input:focus { border-color: #458fff; box-shadow: 0 0 0 2px #e0ecff; }
+    .search-bar button { padding: 10px 20px; background: #458fff; color: white; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; }
+    .search-bar button:hover { background: #2d6fe0; }
+    .product-list { display: flex; flex-direction: column; gap: 10px; }
+    .product-card { background: white; border: 1px solid #e1e3e5; border-radius: 10px; padding: 16px 20px; display: flex; align-items: center; gap: 16px; cursor: pointer; transition: box-shadow 0.15s; text-decoration: none; color: inherit; }
+    .product-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,0.1); border-color: #458fff; }
+    .product-card img { width: 56px; height: 56px; object-fit: cover; border-radius: 6px; background: #f0f0f0; }
+    .product-card .no-img { width: 56px; height: 56px; border-radius: 6px; background: #e8e8e8; display: flex; align-items: center; justify-content: center; font-size: 22px; }
+    .product-info { flex: 1; }
+    .product-info .name { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
+    .product-info .meta { font-size: 13px; color: #6d7175; }
+    .badge { font-size: 11px; padding: 3px 8px; border-radius: 20px; font-weight: 500; }
+    .badge.has-tiers { background: #d4edda; color: #1a6630; }
+    .badge.no-tiers { background: #f0f0f0; color: #6d7175; }
+    .arrow { color: #c9cccf; font-size: 18px; }
+    .empty { text-align: center; padding: 48px; color: #6d7175; font-size: 15px; }
+    .loading { text-align: center; padding: 48px; color: #6d7175; }
+    .pagination { display: flex; justify-content: center; gap: 10px; margin-top: 24px; }
+    .pagination button { padding: 8px 18px; border: 1px solid #c9cccf; border-radius: 6px; background: white; cursor: pointer; font-size: 14px; }
+    .pagination button:disabled { opacity: 0.4; cursor: default; }
+    .pagination button:not(:disabled):hover { background: #f0f0f0; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>🏷️ Tier Pricing Manager</h1>
+  </div>
+  <div class="container">
+    <div class="search-bar">
+      <input type="text" id="searchInput" placeholder="Search products..." />
+      <button onclick="searchProducts()">Search</button>
+    </div>
+    <div class="product-list" id="productList">
+      <div class="loading">Loading products...</div>
+    </div>
+    <div class="pagination">
+      <button id="prevBtn" onclick="changePage(-1)" disabled>← Prev</button>
+      <button id="nextBtn" onclick="changePage(1)" disabled>Next →</button>
+    </div>
+  </div>
+
+  <script>
+    const shop = new URLSearchParams(location.search).get('shop') || '';
+    let cursor = null;
+    let prevCursors = [];
+    let currentQuery = '';
+
+    async function loadProducts(after = null, query = '') {
+      document.getElementById('productList').innerHTML = '<div class="loading">Loading...</div>';
+      const params = new URLSearchParams({ shop });
+      if (after) params.set('after', after);
+      if (query) params.set('query', query);
+
+      const res = await fetch(`/api/products?${params}`);
+      const data = await res.json();
+      if (data.error) {
+        document.getElementById('productList').innerHTML = `<div class="empty">Error: ${data.error}</div>`;
+        return;
+      }
+      renderProducts(data.products);
+      document.getElementById('nextBtn').disabled = !data.hasNextPage;
+      cursor = data.endCursor;
+    }
+
+    function renderProducts(products) {
+      const list = document.getElementById('productList');
+      if (!products.length) {
+        list.innerHTML = '<div class="empty">No products found.</div>';
+        return;
+      }
+      list.innerHTML = products.map(p => `
+        <a class="product-card" href="/admin/product/${p.id}?shop=${shop}">
+          ${p.image ? `<img src="${p.image}" alt="${p.title}">` : '<div class="no-img">🧢</div>'}
+          <div class="product-info">
+            <div class="name">${p.title}</div>
+            <div class="meta">${p.variantCount} variant${p.variantCount !== 1 ? 's' : ''}</div>
+          </div>
+          <span class="badge ${p.hasTiers ? 'has-tiers' : 'no-tiers'}">${p.hasTiers ? '✓ Tiers set' : 'No tiers'}</span>
+          <span class="arrow">›</span>
+        </a>
+      `).join('');
+    }
+
+    function searchProducts() {
+      currentQuery = document.getElementById('searchInput').value.trim();
+      prevCursors = [];
+      cursor = null;
+      document.getElementById('prevBtn').disabled = true;
+      loadProducts(null, currentQuery);
+    }
+
+    function changePage(dir) {
+      if (dir === 1) {
+        prevCursors.push(cursor);
+        loadProducts(cursor, currentQuery);
+      } else {
+        prevCursors.pop();
+        const prev = prevCursors[prevCursors.length - 1] || null;
+        loadProducts(prev, currentQuery);
+      }
+      document.getElementById('prevBtn').disabled = prevCursors.length === 0;
+    }
+
+    document.getElementById('searchInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter') searchProducts();
+    });
+
+    loadProducts();
+  </script>
+</body>
+</html>
