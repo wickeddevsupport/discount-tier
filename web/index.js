@@ -10,7 +10,7 @@ const app = express();
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || `http://localhost:${PORT}`;
+const HOST = process.env.HOST || "https://tier-pricing-discount-production-2f08.up.railway.app";
 const CLIENT_ID = process.env.SHOPIFY_API_KEY || "ea37327071079a155fbdd95f4fc71022";
 const CLIENT_SECRET = process.env.SHOPIFY_API_SECRET || "";
 const SCOPES = "write_discounts,read_discounts,read_products,write_products,read_metaobjects";

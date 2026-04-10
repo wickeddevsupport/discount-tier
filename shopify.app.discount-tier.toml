@@ -2,7 +2,7 @@
 
 client_id = "ea37327071079a155fbdd95f4fc71022"
 name = "discount-tier"
-application_url = "https://tier-pricing-discount-production.up.railway.app"
+application_url = "https://tier-pricing-discount-production-2f08.up.railway.app"
 embedded = true
 
 [build]
@@ -16,4 +16,4 @@ api_version = "2026-04"
 scopes = "write_discounts,read_discounts,read_products,write_products,read_metaobjects"
 
 [auth]
-redirect_urls = [ "https://tier-pricing-discount-production.up.railway.app/callback" ]
+redirect_urls = [ "https://tier-pricing-discount-production-2f08.up.railway.app/callback" ]
