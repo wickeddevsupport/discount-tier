@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || "https://tier-pricing-discount-production-2f08.up.railway.app";
 const CLIENT_ID = process.env.SHOPIFY_API_KEY || "ea37327071079a155fbdd95f4fc71022";
 const CLIENT_SECRET = process.env.SHOPIFY_API_SECRET || "";
-const SCOPES = "write_discounts,read_discounts,read_products,write_products,read_metaobjects";
+const SCOPES = "write_discounts,read_discounts,read_products,write_products,read_metaobjects,read_metafields,write_metafields";
 const API_VERSION = "2026-01";
 
 // In-memory token store (use a DB for production)
@@ -236,6 +236,66 @@ app.post("/api/product/:id/tiers", async (req, res) => {
   const errors = data?.data?.productUpdate?.userErrors ?? [];
   if (errors.length) return res.json({ ok: false, error: errors[0].message });
 
+  res.json({ ok: true });
+});
+
+// ── API: get promo codes ───────────────────────────────────────────────────
+
+app.get("/api/promo-codes", async (req, res) => {
+  const { shop } = req.query;
+  const token = tokenStore[shop];
+  if (!token) return res.status(401).json({ error: "Not authenticated. Please reinstall the app." });
+
+  const data = await gql(shop, token, `{
+    shop {
+      metafield(namespace: "custom", key: "promo_codes") {
+        value
+      }
+    }
+  }`);
+
+  const raw = data?.data?.shop?.metafield?.value;
+  let codes = [];
+  if (raw) {
+    try { codes = JSON.parse(raw); } catch { codes = []; }
+  }
+  res.json({ codes });
+});
+
+// ── API: save promo codes (full replace) ──────────────────────────────────
+
+app.post("/api/promo-codes", async (req, res) => {
+  const { shop } = req.query;
+  const token = tokenStore[shop];
+  if (!token) return res.status(401).json({ error: "Not authenticated. Please reinstall the app." });
+
+  const { codes } = req.body; // array of PromoCode objects
+  if (!Array.isArray(codes)) return res.status(400).json({ error: "codes must be an array" });
+
+  // Get shop GID first
+  const shopData = await gql(shop, token, `{ shop { id } }`);
+  const shopId = shopData?.data?.shop?.id;
+  if (!shopId) return res.status(500).json({ error: "Could not get shop ID" });
+
+  const data = await gql(shop, token, `
+    mutation metafieldsSet($metafields: [MetafieldsSetInput!]!) {
+      metafieldsSet(metafields: $metafields) {
+        metafields { key value }
+        userErrors { field message }
+      }
+    }
+  `, {
+    metafields: [{
+      ownerId: shopId,
+      namespace: "custom",
+      key: "promo_codes",
+      type: "json",
+      value: JSON.stringify(codes),
+    }],
+  });
+
+  const errors = data?.data?.metafieldsSet?.userErrors ?? [];
+  if (errors.length) return res.json({ ok: false, error: errors[0].message });
   res.json({ ok: true });
 });
 

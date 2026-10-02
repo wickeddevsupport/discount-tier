@@ -32,4 +32,12 @@ query CartInput {
       }
     }
   }
+  enteredDiscountCodes {
+    code
+  }
+  shop {
+    promoCodes: metafield(namespace: "custom", key: "promo_codes") {
+      value
+    }
+  }
 }

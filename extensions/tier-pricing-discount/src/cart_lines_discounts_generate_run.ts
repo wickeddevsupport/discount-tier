@@ -11,6 +11,26 @@ type Tier = {
 };
 
 /**
+ * A single promo code entry stored in the shop metafield custom.promo_codes.
+ *
+ * JSON shape (array):
+ *   [
+ *     { "code": "SUMMER10", "type": "percentage", "value": 10, "expires": "2026-12-31" },
+ *     { "code": "FLAT20",   "type": "fixed",      "value": 20 }
+ *   ]
+ *
+ * - type "percentage" — takes value% off the already-tiered price per line item
+ * - type "fixed"      — takes $value off each line item (capped at item price)
+ * - expires           — optional ISO date string; code is ignored on/after that date
+ */
+type PromoCode = {
+  code: string;
+  type: "percentage" | "fixed";
+  value: number;
+  expires?: string;
+};
+
+/**
  * Parse tier data from the price_chart metafield.
  *
  * Supports two JSON shapes:
@@ -99,7 +119,44 @@ const ADDON_TIERS: Tier[] = [
   { qty: 144, price: 3.50 },
 ];
 
+/**
+ * Parse the shop metafield custom.promo_codes.
+ * Returns a Map of uppercased code → PromoCode (only active/non-expired entries).
+ */
+function parsePromoCodes(raw: string | null | undefined): Map<string, PromoCode> {
+  const map = new Map<string, PromoCode>();
+  if (!raw) return map;
+  let list: any[];
+  try {
+    const parsed = JSON.parse(raw);
+    list = Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return map;
+  }
+  const today = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+  for (const item of list) {
+    if (!item?.code || !item?.type || item?.value == null) continue;
+    const type = String(item.type).toLowerCase();
+    if (type !== "percentage" && type !== "fixed") continue;
+    const value = parseFloat(item.value);
+    if (isNaN(value) || value <= 0) continue;
+    // Skip expired codes
+    if (item.expires && String(item.expires) < today) continue;
+    const code = String(item.code).toUpperCase().trim();
+    map.set(code, { code, type: type as "percentage" | "fixed", value, expires: item.expires });
+  }
+  return map;
+}
+
 export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsGenerateRunResult {
+
+  // ── 0. Resolve active promo code (if any) ─────────────────────────────────
+  const promoCodes = parsePromoCodes((input as any).shop?.promoCodes?.value ?? null);
+  let activePromo: PromoCode | null = null;
+  for (const entered of (input as any).enteredDiscountCodes ?? []) {
+    const match = promoCodes.get(String(entered.code).toUpperCase().trim());
+    if (match) { activePromo = match; break; }
+  }
 
   // ── 1. Group hat lines by (bundleId + patchType) ───────────────────────────
   type Group = { lines: typeof input.cart.lines; tiers: Tier[] };
@@ -165,9 +222,23 @@ export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsG
 
     for (const line of lines) {
       const basePrice = parseFloat((line.cost as any).amountPerQuantity.amount);
-      const discountAmount = basePrice - tierPrice;
+
+      // Apply promo on top of tier price
+      let effectivePrice = tierPrice;
+      if (activePromo) {
+        if (activePromo.type === "percentage") {
+          effectivePrice = tierPrice * (1 - activePromo.value / 100);
+        } else {
+          effectivePrice = Math.max(0, tierPrice - activePromo.value);
+        }
+      }
+
+      const discountAmount = basePrice - effectivePrice;
 
       if (discountAmount > 0) {
+        const message = activePromo
+          ? `Tier Pricing + ${activePromo.code}`
+          : "Tier Pricing";
         candidates.push({
           targets: [{ cartLine: { id: line.id } }],
           value: {
@@ -176,7 +247,7 @@ export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsG
               appliesToEachItem: true,
             } satisfies ProductDiscountCandidateFixedAmount,
           },
-          message: "Tier Pricing",
+          message,
         });
       }
     }
@@ -205,9 +276,23 @@ export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsG
 
     for (const line of lines) {
       const basePrice = parseFloat((line.cost as any).amountPerQuantity.amount);
-      const discountAmount = basePrice - tierPrice;
+
+      // Apply promo on top of addon tier price
+      let effectivePrice = tierPrice;
+      if (activePromo) {
+        if (activePromo.type === "percentage") {
+          effectivePrice = tierPrice * (1 - activePromo.value / 100);
+        } else {
+          effectivePrice = Math.max(0, tierPrice - activePromo.value);
+        }
+      }
+
+      const discountAmount = basePrice - effectivePrice;
 
       if (discountAmount > 0) {
+        const message = activePromo
+          ? `Tier Pricing + ${activePromo.code}`
+          : "Tier Pricing";
         candidates.push({
           targets: [{ cartLine: { id: line.id } }],
           value: {
@@ -216,7 +301,7 @@ export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsG
               appliesToEachItem: true,
             } satisfies ProductDiscountCandidateFixedAmount,
           },
-          message: "Tier Pricing",
+          message,
         });
       }
     }
@@ -226,14 +311,23 @@ export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsG
     return { operations: [] };
   }
 
-  return {
-    operations: [
-      {
-        productDiscountsAdd: {
-          candidates,
-          selectionStrategy: ProductDiscountSelectionStrategy.All,
-        },
+  const operations: any[] = [
+    {
+      productDiscountsAdd: {
+        candidates,
+        selectionStrategy: ProductDiscountSelectionStrategy.All,
       },
-    ],
-  };
+    },
+  ];
+
+  // Accept the promo code so Shopify marks it as applied
+  if (activePromo) {
+    operations.push({
+      enteredDiscountCodesAccept: {
+        codes: [{ code: activePromo.code }],
+      },
+    });
+  }
+
+  return { operations };
 }

@@ -3,13 +3,21 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tier Pricing — Products</title>
+  <title>Tier Pricing — Admin</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f6f6f7; color: #202223; }
     .topbar { background: #1a1a2e; color: white; padding: 16px 24px; display: flex; align-items: center; gap: 12px; }
     .topbar h1 { font-size: 18px; font-weight: 600; }
+    .tabs { display: flex; gap: 0; border-bottom: 2px solid #e1e3e5; background: white; padding: 0 24px; }
+    .tab-btn { padding: 14px 20px; font-size: 14px; font-weight: 500; color: #6d7175; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color 0.15s; }
+    .tab-btn.active { color: #458fff; border-bottom-color: #458fff; }
+    .tab-btn:hover:not(.active) { color: #202223; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
     .container { max-width: 900px; margin: 32px auto; padding: 0 16px; }
+
+    /* ── Products tab ── */
     .search-bar { display: flex; gap: 10px; margin-bottom: 24px; }
     .search-bar input { flex: 1; padding: 10px 14px; border: 1px solid #c9cccf; border-radius: 8px; font-size: 14px; outline: none; }
     .search-bar input:focus { border-color: #458fff; box-shadow: 0 0 0 2px #e0ecff; }
@@ -33,38 +41,136 @@
     .pagination button { padding: 8px 18px; border: 1px solid #c9cccf; border-radius: 6px; background: white; cursor: pointer; font-size: 14px; }
     .pagination button:disabled { opacity: 0.4; cursor: default; }
     .pagination button:not(:disabled):hover { background: #f0f0f0; }
+
+    /* ── Promo Codes tab ── */
+    .promo-section { background: white; border: 1px solid #e1e3e5; border-radius: 10px; padding: 24px; margin-bottom: 24px; }
+    .promo-section h2 { font-size: 16px; font-weight: 600; margin-bottom: 20px; }
+    .promo-form { display: grid; grid-template-columns: 1fr 130px 130px 150px auto; gap: 10px; align-items: end; margin-bottom: 24px; }
+    @media (max-width: 700px) { .promo-form { grid-template-columns: 1fr 1fr; } }
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    .form-group label { font-size: 12px; font-weight: 600; color: #6d7175; text-transform: uppercase; }
+    .form-group input, .form-group select { padding: 9px 12px; border: 1px solid #c9cccf; border-radius: 7px; font-size: 14px; outline: none; }
+    .form-group input:focus, .form-group select:focus { border-color: #458fff; box-shadow: 0 0 0 2px #e0ecff; }
+    .btn-add { padding: 9px 20px; background: #458fff; color: white; border: none; border-radius: 7px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .btn-add:hover { background: #2d6fe0; }
+    .btn-add:disabled { opacity: 0.5; cursor: default; }
+    .promo-table { width: 100%; border-collapse: collapse; }
+    .promo-table th { text-align: left; font-size: 12px; font-weight: 600; color: #6d7175; text-transform: uppercase; padding: 8px 12px; border-bottom: 2px solid #e1e3e5; }
+    .promo-table td { padding: 12px; border-bottom: 1px solid #f1f1f1; font-size: 14px; vertical-align: middle; }
+    .promo-table tr:last-child td { border-bottom: none; }
+    .promo-table tr:hover td { background: #f9f9f9; }
+    .code-badge { font-family: monospace; font-size: 13px; background: #f0f6ff; color: #1a4faf; padding: 3px 8px; border-radius: 5px; font-weight: 600; letter-spacing: 0.5px; }
+    .type-badge { font-size: 11px; padding: 3px 8px; border-radius: 20px; font-weight: 500; }
+    .type-badge.pct { background: #e3f5e1; color: #1a6630; }
+    .type-badge.fixed { background: #fff0e0; color: #a35200; }
+    .expired-badge { font-size: 11px; padding: 3px 8px; border-radius: 20px; background: #fde8e8; color: #d72c0d; font-weight: 500; }
+    .btn-delete { background: none; border: 1px solid #e1e3e5; color: #d72c0d; padding: 5px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+    .btn-delete:hover { background: #fff4f4; border-color: #d72c0d; }
+    .promo-empty { text-align: center; padding: 32px; color: #6d7175; font-size: 14px; }
+    .toast { position: fixed; bottom: 24px; right: 24px; padding: 14px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; color: white; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 999; }
+    .toast.success { background: #1a6630; }
+    .toast.error { background: #d72c0d; }
+    .toast.show { opacity: 1; }
   </style>
 </head>
 <body>
   <div class="topbar">
     <h1>🏷️ Tier Pricing Manager</h1>
   </div>
-  <div class="container">
-    <div class="search-bar">
-      <input type="text" id="searchInput" placeholder="Search products..." />
-      <button onclick="searchProducts()">Search</button>
-    </div>
-    <div class="product-list" id="productList">
-      <div class="loading">Loading products...</div>
-    </div>
-    <div class="pagination">
-      <button id="prevBtn" onclick="changePage(-1)" disabled>← Prev</button>
-      <button id="nextBtn" onclick="changePage(1)" disabled>Next →</button>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('products')">Products</button>
+    <button class="tab-btn" onclick="switchTab('promo')">Promo Codes</button>
+  </div>
+
+  <!-- Products Tab -->
+  <div class="tab-panel active" id="tab-products">
+    <div class="container">
+      <div class="search-bar">
+        <input type="text" id="searchInput" placeholder="Search products..." />
+        <button onclick="searchProducts()">Search</button>
+      </div>
+      <div class="product-list" id="productList">
+        <div class="loading">Loading products...</div>
+      </div>
+      <div class="pagination">
+        <button id="prevBtn" onclick="changePage(-1)" disabled>← Prev</button>
+        <button id="nextBtn" onclick="changePage(1)" disabled>Next →</button>
+      </div>
     </div>
   </div>
+
+  <!-- Promo Codes Tab -->
+  <div class="tab-panel" id="tab-promo">
+    <div class="container">
+      <div class="promo-section">
+        <h2>Add Promo Code</h2>
+        <div class="promo-form">
+          <div class="form-group">
+            <label>Code</label>
+            <input type="text" id="promoCode" placeholder="e.g. SUMMER10" style="text-transform:uppercase" />
+          </div>
+          <div class="form-group">
+            <label>Type</label>
+            <select id="promoType">
+              <option value="percentage">Percentage %</option>
+              <option value="fixed">Fixed Amount $</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Value</label>
+            <input type="number" id="promoValue" placeholder="e.g. 10" min="0.01" step="0.01" />
+          </div>
+          <div class="form-group">
+            <label>Expires (optional)</label>
+            <input type="date" id="promoExpires" />
+          </div>
+          <button class="btn-add" onclick="addPromoCode()">Add Code</button>
+        </div>
+
+        <table class="promo-table">
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Type</th>
+              <th>Value</th>
+              <th>Expires</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="promoTableBody">
+            <tr><td colspan="5" class="promo-empty">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
 
   <script>
     const shop = new URLSearchParams(location.search).get('shop') || '';
     let cursor = null;
     let prevCursors = [];
     let currentQuery = '';
+    let promoCodes = [];
 
+    // ── Tab switching ──────────────────────────────────────────────────────
+    function switchTab(name) {
+      document.querySelectorAll('.tab-btn').forEach((b, i) => {
+        b.classList.toggle('active', ['products','promo'][i] === name);
+      });
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      document.getElementById(`tab-${name}`).classList.add('active');
+      if (name === 'promo') loadPromoCodes();
+    }
+
+    // ── Products ───────────────────────────────────────────────────────────
     async function loadProducts(after = null, query = '') {
       document.getElementById('productList').innerHTML = '<div class="loading">Loading...</div>';
       const params = new URLSearchParams({ shop });
       if (after) params.set('after', after);
       if (query) params.set('query', query);
-
       const res = await fetch(`/api/products?${params}`);
       const data = await res.json();
       if (data.error) {
@@ -78,10 +184,7 @@
 
     function renderProducts(products) {
       const list = document.getElementById('productList');
-      if (!products.length) {
-        list.innerHTML = '<div class="empty">No products found.</div>';
-        return;
-      }
+      if (!products.length) { list.innerHTML = '<div class="empty">No products found.</div>'; return; }
       list.innerHTML = products.map(p => `
         <a class="product-card" href="/admin/product/${p.id}?shop=${shop}">
           ${p.image ? `<img src="${p.image}" alt="${p.title}">` : '<div class="no-img">🧢</div>'}
@@ -97,29 +200,114 @@
 
     function searchProducts() {
       currentQuery = document.getElementById('searchInput').value.trim();
-      prevCursors = [];
-      cursor = null;
+      prevCursors = []; cursor = null;
       document.getElementById('prevBtn').disabled = true;
       loadProducts(null, currentQuery);
     }
 
     function changePage(dir) {
-      if (dir === 1) {
-        prevCursors.push(cursor);
-        loadProducts(cursor, currentQuery);
-      } else {
-        prevCursors.pop();
-        const prev = prevCursors[prevCursors.length - 1] || null;
-        loadProducts(prev, currentQuery);
-      }
+      if (dir === 1) { prevCursors.push(cursor); loadProducts(cursor, currentQuery); }
+      else { prevCursors.pop(); loadProducts(prevCursors[prevCursors.length - 1] || null, currentQuery); }
       document.getElementById('prevBtn').disabled = prevCursors.length === 0;
     }
 
-    document.getElementById('searchInput').addEventListener('keydown', e => {
-      if (e.key === 'Enter') searchProducts();
-    });
-
+    document.getElementById('searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') searchProducts(); });
     loadProducts();
+
+    // ── Promo Codes ────────────────────────────────────────────────────────
+    async function loadPromoCodes() {
+      const res = await fetch(`/api/promo-codes?shop=${shop}`);
+      const data = await res.json();
+      promoCodes = data.codes || [];
+      renderPromoCodes();
+    }
+
+    function renderPromoCodes() {
+      const tbody = document.getElementById('promoTableBody');
+      if (!promoCodes.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="promo-empty">No promo codes yet. Add one above.</td></tr>';
+        return;
+      }
+      const today = new Date().toISOString().slice(0, 10);
+      tbody.innerHTML = promoCodes.map((c, i) => {
+        const isExpired = c.expires && c.expires < today;
+        const typeLabel = c.type === 'percentage'
+          ? `<span class="type-badge pct">% off</span>`
+          : `<span class="type-badge fixed">$ off</span>`;
+        const valueLabel = c.type === 'percentage' ? `${c.value}%` : `$${parseFloat(c.value).toFixed(2)}`;
+        const expiryLabel = c.expires
+          ? (isExpired ? `<span class="expired-badge">Expired ${c.expires}</span>` : c.expires)
+          : '—';
+        return `
+          <tr>
+            <td><span class="code-badge">${c.code}</span></td>
+            <td>${typeLabel}</td>
+            <td>${valueLabel}</td>
+            <td>${expiryLabel}</td>
+            <td><button class="btn-delete" onclick="deletePromoCode(${i})">Delete</button></td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function addPromoCode() {
+      const code = document.getElementById('promoCode').value.trim().toUpperCase();
+      const type = document.getElementById('promoType').value;
+      const value = parseFloat(document.getElementById('promoValue').value);
+      const expires = document.getElementById('promoExpires').value || null;
+
+      if (!code) { showToast('Enter a promo code', 'error'); return; }
+      if (isNaN(value) || value <= 0) { showToast('Enter a valid discount value', 'error'); return; }
+      if (promoCodes.find(c => c.code === code)) { showToast('Code already exists', 'error'); return; }
+
+      const newCode = { code, type, value, ...(expires ? { expires } : {}) };
+      const updated = [...promoCodes, newCode];
+
+      const btn = document.querySelector('.btn-add');
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+
+      const res = await fetch(`/api/promo-codes?shop=${shop}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ codes: updated }),
+      });
+      const data = await res.json();
+
+      btn.disabled = false;
+      btn.textContent = 'Add Code';
+
+      if (data.ok) {
+        promoCodes = updated;
+        renderPromoCodes();
+        document.getElementById('promoCode').value = '';
+        document.getElementById('promoValue').value = '';
+        document.getElementById('promoExpires').value = '';
+        showToast(`${code} added`, 'success');
+      } else {
+        showToast(data.error || 'Failed to save', 'error');
+      }
+    }
+
+    async function deletePromoCode(index) {
+      const code = promoCodes[index].code;
+      if (!confirm(`Delete promo code "${code}"?`)) return;
+      const updated = promoCodes.filter((_, i) => i !== index);
+      const res = await fetch(`/api/promo-codes?shop=${shop}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ codes: updated }),
+      });
+      const data = await res.json();
+      if (data.ok) { promoCodes = updated; renderPromoCodes(); showToast(`${code} deleted`, 'success'); }
+      else showToast(data.error || 'Failed to delete', 'error');
+    }
+
+    function showToast(msg, type) {
+      const t = document.getElementById('toast');
+      t.textContent = msg; t.className = `toast ${type} show`;
+      setTimeout(() => t.className = `toast ${type}`, 3000);
+    }
   </script>
 </body>
 </html>
