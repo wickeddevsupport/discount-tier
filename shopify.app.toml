@@ -13,7 +13,7 @@ api_version = "2026-04"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_discounts,read_metaobjects,read_products,write_discounts,write_products,read_metafields,write_metafields"
+scopes = "read_discounts,read_metaobjects,read_products,write_discounts,write_products"
 
 [auth]
 redirect_urls = ["https://tier-pricing-discount-production-2f08.up.railway.app/callback"]

@@ -18,5 +18,4 @@ description = "t:description"
   export = "cart-delivery-options-discounts-generate-run"
 
   [extensions.build]
-  command = ""
   path = "dist/function.wasm"
