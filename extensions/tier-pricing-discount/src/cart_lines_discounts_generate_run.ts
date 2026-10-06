@@ -312,6 +312,7 @@ export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsG
           candidates: [
             {
               message: activePromo.code,
+              targets: [{ orderSubtotal: { excludedCartLineIds: [] } }],
               value: {
                 fixedAmount: {
                   amount: orderDiscountAmount.toFixed(2),
