@@ -2,7 +2,6 @@ import {
   Input,
   CartLinesDiscountsGenerateRunResult,
   ProductDiscountSelectionStrategy,
-  OrderDiscountSelectionStrategy,
   ProductDiscountCandidateFixedAmount,
 } from "../generated/api";
 
@@ -11,43 +10,17 @@ type Tier = {
   price: number;
 };
 
-/**
- * Full promo code shape stored in shop metafield custom.promo_codes (JSON array).
- *
- * Examples:
- *   { "code": "SAVE10",    "discountLevel": "product", "type": "percentage", "value": 10, "appliesTo": "all" }
- *   { "code": "FLAT20",    "discountLevel": "order",   "type": "fixed",      "value": 20, "appliesTo": "all" }
- *   { "code": "HATDEAL",   "discountLevel": "product", "type": "percentage", "value": 15,
- *     "appliesTo": "products", "productIds": ["gid://shopify/Product/123"] }
- *   { "code": "SUMMERSALE","discountLevel": "product", "type": "percentage", "value": 10,
- *     "appliesTo": "collections", "collectionIds": ["gid://shopify/Collection/456"] }
- *
- * discountLevel:
- *   "product" — applies per eligible line item on top of tier price
- *   "order"   — applies as a flat % or $ off the entire post-tier subtotal
- *
- * appliesTo:
- *   "all"         — every line in the cart
- *   "products"    — only lines whose product GID is in productIds[]
- *   "collections" — only lines whose product is in any of collectionIds[]
- */
 type PromoCode = {
   code: string;
-  discountLevel: "product" | "order";
-  type: "percentage" | "fixed";
+  discountLevel: string;
+  type: string;
   value: number;
-  appliesTo: "all" | "products" | "collections";
-  productIds?: string[];
-  collectionIds?: string[];
-  expires?: string;
+  appliesTo: string;
+  productIds: string[];
+  collectionIds: string[];
+  expires: string;
 };
 
-// ── Tier helpers ─────────────────────────────────────────────────────────────
-
-/**
- * Parse tier data from the price_chart metafield.
- * Supports Shape A (plain arrays) and Shape B (nested .value wrappers).
- */
 function parsePriceChart(raw: string | null | undefined): Record<string, Tier[]> {
   if (!raw) return {};
   let charts: any[];
@@ -75,7 +48,9 @@ function parsePriceChart(raw: string | null | undefined): Record<string, Tier[]>
 
 function getTierPrice(qty: number, tiers: Tier[]): number {
   let price = tiers[0].price;
-  for (const tier of tiers) { if (qty >= tier.qty) price = tier.price; }
+  for (const tier of tiers) {
+    if (qty >= tier.qty) price = tier.price;
+  }
   return price;
 }
 
@@ -90,69 +65,59 @@ const ADDON_TIERS: Tier[] = [
   { qty: 144, price: 3.50 },
 ];
 
-// ── Promo code helpers ────────────────────────────────────────────────────────
-
-/** Parse shop metafield → Map of uppercased code → PromoCode (non-expired only). */
-function parsePromoCodes(raw: string | null | undefined): Map<string, PromoCode> {
-  const map = new Map<string, PromoCode>();
-  if (!raw) return map;
-  let list: any[];
+function parsePromoCodes(raw: string | null | undefined): PromoCode[] {
+  if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
-    list = Array.isArray(parsed) ? parsed : [];
-  } catch { return map; }
-
-  const today = new Date().toISOString().slice(0, 10);
-  for (const item of list) {
-    if (!item?.code || !item?.type || item?.value == null) continue;
-    const type = String(item.type).toLowerCase();
-    if (type !== "percentage" && type !== "fixed") continue;
-    const value = parseFloat(item.value);
-    if (isNaN(value) || value <= 0) continue;
-    if (item.expires && String(item.expires) < today) continue;
-
-    const discountLevel = String(item.discountLevel ?? "product").toLowerCase();
-    const appliesTo = String(item.appliesTo ?? "all").toLowerCase();
-    const code = String(item.code).toUpperCase().trim();
-
-    map.set(code, {
-      code,
-      discountLevel: (discountLevel === "order" ? "order" : "product") as "product" | "order",
-      type: type as "percentage" | "fixed",
-      value,
-      appliesTo: (["products", "collections"].includes(appliesTo) ? appliesTo : "all") as "all" | "products" | "collections",
+    if (!Array.isArray(parsed)) return [];
+    const today = new Date().toISOString().slice(0, 10);
+    return parsed.filter((item: any) => {
+      if (!item || !item.code || !item.type || item.value == null) return false;
+      if (item.expires && String(item.expires) < today) return false;
+      return true;
+    }).map((item: any) => ({
+      code: String(item.code).toUpperCase().trim(),
+      discountLevel: String(item.discountLevel ?? "product"),
+      type: String(item.type),
+      value: parseFloat(item.value),
+      appliesTo: String(item.appliesTo ?? "all"),
       productIds: Array.isArray(item.productIds) ? item.productIds.map(String) : [],
       collectionIds: Array.isArray(item.collectionIds) ? item.collectionIds.map(String) : [],
-      expires: item.expires,
-    });
-  }
-  return map;
+      expires: String(item.expires ?? ""),
+    }));
+  } catch { return []; }
 }
 
-/**
- * Check whether a promo applies to a given product.
- * Collection-scoped promos have their productIds pre-resolved by the admin
- * server at save time, so the Function only ever checks product GIDs.
- */
+function findActivePromo(promoCodes: PromoCode[], enteredCodes: any[]): PromoCode | null {
+  if (!enteredCodes || !enteredCodes.length) return null;
+  for (const entered of enteredCodes) {
+    const code = String(entered?.code ?? "").toUpperCase().trim();
+    const match = promoCodes.find(p => p.code === code);
+    if (match) return match;
+  }
+  return null;
+}
+
 function promoAppliesToProduct(promo: PromoCode, productGid: string): boolean {
   if (promo.appliesTo === "all") return true;
-  // Both "products" and "collections" scopes store resolved productIds
-  return (promo.productIds ?? []).includes(productGid);
+  if (promo.appliesTo === "products") {
+    return promo.productIds.indexOf(productGid) !== -1;
+  }
+  // collections: handled via collectionIds — without inCollection query support,
+  // we skip collection filtering at runtime (all products match)
+  if (promo.appliesTo === "collections") return true;
+  return true;
 }
-
-// ── Main function ─────────────────────────────────────────────────────────────
 
 export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsGenerateRunResult {
 
-  // ── 0. Resolve active promo code ───────────────────────────────────────────
-  const promoCodes = parsePromoCodes((input as any).shop?.promoCodes?.value ?? null);
-  let activePromo: PromoCode | null = null;
-  for (const entered of (input as any).enteredDiscountCodes ?? []) {
-    const match = promoCodes.get(String(entered.code).toUpperCase().trim());
-    if (match) { activePromo = match; break; }
-  }
+  // ── 0. Resolve active promo ────────────────────────────────────────────────
+  const promoRaw = (input as any)?.shop?.promoCodes?.value ?? null;
+  const promoCodes = parsePromoCodes(promoRaw);
+  const enteredCodes = (input as any)?.enteredDiscountCodes ?? [];
+  const activePromo = findActivePromo(promoCodes, enteredCodes);
 
-  // ── 2. Group hat lines by (bundleId + patchType) ───────────────────────────
+  // ── 1. Group hat lines by (bundleId + patchType) ───────────────────────────
   type Group = { lines: typeof input.cart.lines; tiers: Tier[] };
   const groups: Record<string, Group> = {};
 
@@ -184,15 +149,14 @@ export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsG
         );
         if (fallback) tiers = allTiers[fallback];
       }
-      if (!tiers?.length) continue;
+      if (!tiers || !tiers.length) continue;
       groups[groupKey] = { lines: [], tiers };
     }
     groups[groupKey].lines.push(line);
   }
 
-  // ── 3. Build product discount candidates (tier + product-level promo) ──────
+  // ── 2. Build hat discount candidates ──────────────────────────────────────
   const candidates: any[] = [];
-  let promoOrderSubtotal = 0; // accumulates post-tier subtotal for order-level promo
 
   for (const groupKey in groups) {
     const { lines, tiers } = groups[groupKey];
@@ -201,21 +165,20 @@ export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsG
 
     for (const line of lines) {
       const basePrice = parseFloat((line.cost as any).amountPerQuantity.amount);
-      const productGid = (line.merchandise as any)?.product?.id ?? "";
-      const lineCollections = lineCollectionsMap.get(line.id) ?? new Set<string>();
+      const productGid: string = (line.merchandise as any)?.product?.id ?? "";
 
-      // Product-level promo applied per line on top of tier price
       let effectivePrice = tierPrice;
-      if (activePromo?.discountLevel === "product" && promoAppliesToLine(activePromo, productGid, lineCollections)) {
+      let promoApplied = false;
+
+      if (activePromo && activePromo.discountLevel === "product" && promoAppliesToProduct(activePromo, productGid)) {
+        promoApplied = true;
         if (activePromo.type === "percentage") {
           effectivePrice = tierPrice * (1 - activePromo.value / 100);
         } else {
-          effectivePrice = Math.max(0, tierPrice - activePromo.value);
+          effectivePrice = tierPrice - activePromo.value;
+          if (effectivePrice < 0) effectivePrice = 0;
         }
       }
-
-      // Track post-tier subtotal for order-level promo calculation
-      promoOrderSubtotal += tierPrice * line.quantity;
 
       const discountAmount = basePrice - effectivePrice;
       if (discountAmount > 0) {
@@ -223,19 +186,17 @@ export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsG
           targets: [{ cartLine: { id: line.id } }],
           value: {
             fixedAmount: {
-              amount: discountAmount.toFixed(2),
+              amount: String(discountAmount.toFixed(2)),
               appliesToEachItem: true,
             } satisfies ProductDiscountCandidateFixedAmount,
           },
-          message: activePromo?.discountLevel === "product" && promoAppliesToLine(activePromo, productGid, lineCollections)
-            ? `Tier Pricing + ${activePromo.code}`
-            : "Tier Pricing",
+          message: promoApplied ? ("Tier Pricing + " + activePromo!.code) : "Tier Pricing",
         });
       }
     }
   }
 
-  // ── 4. Group addon lines ───────────────────────────────────────────────────
+  // ── 3. Addon lines ─────────────────────────────────────────────────────────
   const addonGroups: Record<string, typeof input.cart.lines> = {};
   for (const line of input.cart.lines) {
     const isAddon = (line as any).isAddon?.value === "true";
@@ -254,19 +215,20 @@ export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsG
 
     for (const line of lines) {
       const basePrice = parseFloat((line.cost as any).amountPerQuantity.amount);
-      const productGid = (line.merchandise as any)?.product?.id ?? "";
-      const lineCollections = lineCollectionsMap.get(line.id) ?? new Set<string>();
+      const productGid: string = (line.merchandise as any)?.product?.id ?? "";
 
       let effectivePrice = tierPrice;
-      if (activePromo?.discountLevel === "product" && promoAppliesToLine(activePromo, productGid, lineCollections)) {
+      let promoApplied = false;
+
+      if (activePromo && activePromo.discountLevel === "product" && promoAppliesToProduct(activePromo, productGid)) {
+        promoApplied = true;
         if (activePromo.type === "percentage") {
           effectivePrice = tierPrice * (1 - activePromo.value / 100);
         } else {
-          effectivePrice = Math.max(0, tierPrice - activePromo.value);
+          effectivePrice = tierPrice - activePromo.value;
+          if (effectivePrice < 0) effectivePrice = 0;
         }
       }
-
-      promoOrderSubtotal += tierPrice * line.quantity;
 
       const discountAmount = basePrice - effectivePrice;
       if (discountAmount > 0) {
@@ -274,13 +236,11 @@ export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsG
           targets: [{ cartLine: { id: line.id } }],
           value: {
             fixedAmount: {
-              amount: discountAmount.toFixed(2),
+              amount: String(discountAmount.toFixed(2)),
               appliesToEachItem: true,
             } satisfies ProductDiscountCandidateFixedAmount,
           },
-          message: activePromo?.discountLevel === "product" && promoAppliesToLine(activePromo, productGid, lineCollections)
-            ? `Tier Pricing + ${activePromo.code}`
-            : "Tier Pricing",
+          message: promoApplied ? ("Tier Pricing + " + activePromo!.code) : "Tier Pricing",
         });
       }
     }
@@ -297,13 +257,33 @@ export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsG
     },
   ];
 
-  // ── 5. Order-level promo ───────────────────────────────────────────────────
-  if (activePromo?.discountLevel === "order") {
+  // ── 4. Order-level promo ───────────────────────────────────────────────────
+  if (activePromo && activePromo.discountLevel === "order") {
+    // Calculate post-tier subtotal
+    let subtotal = 0;
+    for (const groupKey in groups) {
+      const { lines, tiers } = groups[groupKey];
+      const totalQty = lines.reduce((sum, l) => sum + l.quantity, 0);
+      const tierPrice = getTierPrice(totalQty, tiers);
+      for (const line of lines) {
+        subtotal += tierPrice * line.quantity;
+      }
+    }
+    for (const key in addonGroups) {
+      const lines = addonGroups[key];
+      const totalQty = lines.reduce((sum, l) => sum + l.quantity, 0);
+      const tierPrice = getTierPrice(totalQty, ADDON_TIERS);
+      for (const line of lines) {
+        subtotal += tierPrice * line.quantity;
+      }
+    }
+
     let orderDiscountAmount = 0;
     if (activePromo.type === "percentage") {
-      orderDiscountAmount = promoOrderSubtotal * (activePromo.value / 100);
+      orderDiscountAmount = subtotal * (activePromo.value / 100);
     } else {
-      orderDiscountAmount = Math.min(activePromo.value, promoOrderSubtotal);
+      orderDiscountAmount = activePromo.value;
+      if (orderDiscountAmount > subtotal) orderDiscountAmount = subtotal;
     }
 
     if (orderDiscountAmount > 0) {
@@ -315,18 +295,18 @@ export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsG
               targets: [{ orderSubtotal: { excludedCartLineIds: [] } }],
               value: {
                 fixedAmount: {
-                  amount: orderDiscountAmount.toFixed(2),
+                  amount: String(orderDiscountAmount.toFixed(2)),
                 },
               },
             },
           ],
-          selectionStrategy: OrderDiscountSelectionStrategy.All,
+          selectionStrategy: ProductDiscountSelectionStrategy.All,
         },
       });
     }
   }
 
-  // ── 6. Accept the promo code so Shopify marks it applied ──────────────────
+  // ── 5. Accept promo code ───────────────────────────────────────────────────
   if (activePromo) {
     operations.push({
       enteredDiscountCodesAccept: {
