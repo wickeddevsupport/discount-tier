@@ -45,24 +45,29 @@
     /* ── Promo Codes tab ── */
     .promo-section { background: white; border: 1px solid #e1e3e5; border-radius: 10px; padding: 24px; margin-bottom: 24px; }
     .promo-section h2 { font-size: 16px; font-weight: 600; margin-bottom: 20px; }
-    .promo-form { display: grid; grid-template-columns: 1fr 130px 130px 150px auto; gap: 10px; align-items: end; margin-bottom: 24px; }
-    @media (max-width: 700px) { .promo-form { grid-template-columns: 1fr 1fr; } }
+    .promo-form-grid { display: flex; flex-direction: column; gap: 14px; }
+    .form-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
     .form-group { display: flex; flex-direction: column; gap: 5px; }
+    .form-group.flex-1 { flex: 1; min-width: 200px; }
     .form-group label { font-size: 12px; font-weight: 600; color: #6d7175; text-transform: uppercase; }
-    .form-group input, .form-group select { padding: 9px 12px; border: 1px solid #c9cccf; border-radius: 7px; font-size: 14px; outline: none; }
+    .form-group .hint { font-size: 11px; color: #9da1a4; text-transform: none; font-weight: 400; }
+    .form-group input, .form-group select { padding: 9px 12px; border: 1px solid #c9cccf; border-radius: 7px; font-size: 14px; outline: none; min-width: 130px; }
     .form-group input:focus, .form-group select:focus { border-color: #458fff; box-shadow: 0 0 0 2px #e0ecff; }
-    .btn-add { padding: 9px 20px; background: #458fff; color: white; border: none; border-radius: 7px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .btn-add { padding: 9px 24px; background: #458fff; color: white; border: none; border-radius: 7px; font-size: 14px; font-weight: 600; cursor: pointer; }
     .btn-add:hover { background: #2d6fe0; }
     .btn-add:disabled { opacity: 0.5; cursor: default; }
     .promo-table { width: 100%; border-collapse: collapse; }
     .promo-table th { text-align: left; font-size: 12px; font-weight: 600; color: #6d7175; text-transform: uppercase; padding: 8px 12px; border-bottom: 2px solid #e1e3e5; }
-    .promo-table td { padding: 12px; border-bottom: 1px solid #f1f1f1; font-size: 14px; vertical-align: middle; }
+    .promo-table td { padding: 10px 12px; border-bottom: 1px solid #f1f1f1; font-size: 13px; vertical-align: middle; }
     .promo-table tr:last-child td { border-bottom: none; }
     .promo-table tr:hover td { background: #f9f9f9; }
     .code-badge { font-family: monospace; font-size: 13px; background: #f0f6ff; color: #1a4faf; padding: 3px 8px; border-radius: 5px; font-weight: 600; letter-spacing: 0.5px; }
+    .lvl-badge { font-size: 11px; padding: 3px 8px; border-radius: 20px; font-weight: 500; }
+    .lvl-badge.product { background: #e3f5e1; color: #1a6630; }
+    .lvl-badge.order { background: #e8f0fe; color: #1a4faf; }
     .type-badge { font-size: 11px; padding: 3px 8px; border-radius: 20px; font-weight: 500; }
-    .type-badge.pct { background: #e3f5e1; color: #1a6630; }
-    .type-badge.fixed { background: #fff0e0; color: #a35200; }
+    .type-badge.pct { background: #fff0e0; color: #a35200; }
+    .type-badge.fixed { background: #f0f0f0; color: #6d7175; }
     .expired-badge { font-size: 11px; padding: 3px 8px; border-radius: 20px; background: #fde8e8; color: #d72c0d; font-weight: 500; }
     .btn-delete { background: none; border: 1px solid #e1e3e5; color: #d72c0d; padding: 5px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; }
     .btn-delete:hover { background: #fff4f4; border-color: #d72c0d; }
@@ -105,41 +110,79 @@
     <div class="container">
       <div class="promo-section">
         <h2>Add Promo Code</h2>
-        <div class="promo-form">
-          <div class="form-group">
-            <label>Code</label>
-            <input type="text" id="promoCode" placeholder="e.g. SUMMER10" style="text-transform:uppercase" />
+
+        <div class="promo-form-grid">
+          <!-- Row 1 -->
+          <div class="form-row">
+            <div class="form-group">
+              <label>Code</label>
+              <input type="text" id="promoCode" placeholder="e.g. SUMMER10" style="text-transform:uppercase" />
+            </div>
+            <div class="form-group">
+              <label>Discount Level</label>
+              <select id="promoLevel" onchange="onLevelChange()">
+                <option value="product">Product Discount</option>
+                <option value="order">Order Discount</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Type</label>
+              <select id="promoType">
+                <option value="percentage">Percentage %</option>
+                <option value="fixed">Fixed Amount $</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Value</label>
+              <input type="number" id="promoValue" placeholder="e.g. 10" min="0.01" step="0.01" />
+            </div>
+            <div class="form-group">
+              <label>Expires (optional)</label>
+              <input type="date" id="promoExpires" />
+            </div>
           </div>
-          <div class="form-group">
-            <label>Type</label>
-            <select id="promoType">
-              <option value="percentage">Percentage %</option>
-              <option value="fixed">Fixed Amount $</option>
-            </select>
+
+          <!-- Applies To (product level only) -->
+          <div class="form-row" id="appliesToRow">
+            <div class="form-group" style="min-width:180px">
+              <label>Applies To</label>
+              <select id="promoAppliesTo" onchange="onAppliesToChange()">
+                <option value="all">All Products</option>
+                <option value="products">Specific Products</option>
+                <option value="collections">Specific Collections</option>
+              </select>
+            </div>
+            <div class="form-group flex-1" id="productIdsGroup" style="display:none">
+              <label>Product IDs <span class="hint">(comma separated Shopify product IDs, e.g. 123456,789012)</span></label>
+              <input type="text" id="promoProductIds" placeholder="e.g. 8765432100,8765432101" />
+            </div>
+            <div class="form-group flex-1" id="collectionIdsGroup" style="display:none">
+              <label>Collection IDs <span class="hint">(comma separated Shopify collection IDs)</span></label>
+              <input type="text" id="promoCollectionIds" placeholder="e.g. 445566778,998877665" />
+            </div>
           </div>
-          <div class="form-group">
-            <label>Value</label>
-            <input type="number" id="promoValue" placeholder="e.g. 10" min="0.01" step="0.01" />
-          </div>
-          <div class="form-group">
-            <label>Expires (optional)</label>
-            <input type="date" id="promoExpires" />
-          </div>
+        </div>
+
+        <div style="margin-top:16px">
           <button class="btn-add" onclick="addPromoCode()">Add Code</button>
         </div>
+
+        <hr style="margin:24px 0;border:none;border-top:1px solid #e1e3e5">
 
         <table class="promo-table">
           <thead>
             <tr>
               <th>Code</th>
+              <th>Level</th>
               <th>Type</th>
               <th>Value</th>
+              <th>Applies To</th>
               <th>Expires</th>
               <th></th>
             </tr>
           </thead>
           <tbody id="promoTableBody">
-            <tr><td colspan="5" class="promo-empty">Loading...</td></tr>
+            <tr><td colspan="7" class="promo-empty">Loading...</td></tr>
           </tbody>
         </table>
       </div>
@@ -222,15 +265,29 @@
       renderPromoCodes();
     }
 
+    function onLevelChange() {
+      const level = document.getElementById('promoLevel').value;
+      document.getElementById('appliesToRow').style.display = level === 'order' ? 'none' : 'flex';
+    }
+
+    function onAppliesToChange() {
+      const val = document.getElementById('promoAppliesTo').value;
+      document.getElementById('productIdsGroup').style.display = val === 'products' ? 'flex' : 'none';
+      document.getElementById('collectionIdsGroup').style.display = val === 'collections' ? 'flex' : 'none';
+    }
+
     function renderPromoCodes() {
       const tbody = document.getElementById('promoTableBody');
       if (!promoCodes.length) {
-        tbody.innerHTML = '<tr><td colspan="5" class="promo-empty">No promo codes yet. Add one above.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="promo-empty">No promo codes yet. Add one above.</td></tr>';
         return;
       }
       const today = new Date().toISOString().slice(0, 10);
       tbody.innerHTML = promoCodes.map((c, i) => {
         const isExpired = c.expires && c.expires < today;
+        const levelLabel = c.discountLevel === 'order'
+          ? `<span class="lvl-badge order">Order</span>`
+          : `<span class="lvl-badge product">Product</span>`;
         const typeLabel = c.type === 'percentage'
           ? `<span class="type-badge pct">% off</span>`
           : `<span class="type-badge fixed">$ off</span>`;
@@ -238,11 +295,23 @@
         const expiryLabel = c.expires
           ? (isExpired ? `<span class="expired-badge">Expired ${c.expires}</span>` : c.expires)
           : '—';
+
+        let appliesToLabel = 'All products';
+        if (c.appliesTo === 'products' && c.productIds?.length) {
+          appliesToLabel = `${c.productIds.length} product${c.productIds.length > 1 ? 's' : ''}`;
+        } else if (c.appliesTo === 'collections' && c.collectionIds?.length) {
+          appliesToLabel = `${c.collectionIds.length} collection${c.collectionIds.length > 1 ? 's' : ''}`;
+        } else if (c.discountLevel === 'order') {
+          appliesToLabel = 'Entire order';
+        }
+
         return `
           <tr>
             <td><span class="code-badge">${c.code}</span></td>
+            <td>${levelLabel}</td>
             <td>${typeLabel}</td>
             <td>${valueLabel}</td>
+            <td style="color:#6d7175;font-size:12px">${appliesToLabel}</td>
             <td>${expiryLabel}</td>
             <td><button class="btn-delete" onclick="deletePromoCode(${i})">Delete</button></td>
           </tr>
@@ -252,20 +321,46 @@
 
     async function addPromoCode() {
       const code = document.getElementById('promoCode').value.trim().toUpperCase();
+      const discountLevel = document.getElementById('promoLevel').value;
       const type = document.getElementById('promoType').value;
       const value = parseFloat(document.getElementById('promoValue').value);
       const expires = document.getElementById('promoExpires').value || null;
+      const appliesTo = discountLevel === 'order' ? 'all' : document.getElementById('promoAppliesTo').value;
 
       if (!code) { showToast('Enter a promo code', 'error'); return; }
       if (isNaN(value) || value <= 0) { showToast('Enter a valid discount value', 'error'); return; }
       if (promoCodes.find(c => c.code === code)) { showToast('Code already exists', 'error'); return; }
 
-      const newCode = { code, type, value, ...(expires ? { expires } : {}) };
+      // Parse product/collection IDs — convert numeric IDs to GIDs
+      let productIds = [];
+      let collectionIds = [];
+      if (appliesTo === 'products') {
+        const raw = document.getElementById('promoProductIds').value.trim();
+        if (!raw) { showToast('Enter at least one product ID', 'error'); return; }
+        productIds = raw.split(',').map(s => {
+          const id = s.trim();
+          return id.startsWith('gid://') ? id : `gid://shopify/Product/${id}`;
+        });
+      }
+      if (appliesTo === 'collections') {
+        const raw = document.getElementById('promoCollectionIds').value.trim();
+        if (!raw) { showToast('Enter at least one collection ID', 'error'); return; }
+        collectionIds = raw.split(',').map(s => {
+          const id = s.trim();
+          return id.startsWith('gid://') ? id : `gid://shopify/Collection/${id}`;
+        });
+      }
+
+      const newCode = {
+        code, discountLevel, type, value, appliesTo,
+        ...(productIds.length ? { productIds } : {}),
+        ...(collectionIds.length ? { collectionIds } : {}),
+        ...(expires ? { expires } : {}),
+      };
       const updated = [...promoCodes, newCode];
 
       const btn = document.querySelector('.btn-add');
-      btn.disabled = true;
-      btn.textContent = 'Saving...';
+      btn.disabled = true; btn.textContent = 'Saving...';
 
       const res = await fetch(`/api/promo-codes?shop=${shop}`, {
         method: 'POST',
@@ -273,9 +368,7 @@
         body: JSON.stringify({ codes: updated }),
       });
       const data = await res.json();
-
-      btn.disabled = false;
-      btn.textContent = 'Add Code';
+      btn.disabled = false; btn.textContent = 'Add Code';
 
       if (data.ok) {
         promoCodes = updated;
@@ -283,6 +376,10 @@
         document.getElementById('promoCode').value = '';
         document.getElementById('promoValue').value = '';
         document.getElementById('promoExpires').value = '';
+        document.getElementById('promoProductIds').value = '';
+        document.getElementById('promoCollectionIds').value = '';
+        document.getElementById('promoAppliesTo').value = 'all';
+        onAppliesToChange();
         showToast(`${code} added`, 'success');
       } else {
         showToast(data.error || 'Failed to save', 'error');
