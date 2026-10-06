@@ -130,22 +130,14 @@ function parsePromoCodes(raw: string | null | undefined): Map<string, PromoCode>
 }
 
 /**
- * Check whether a promo applies to a given cart line based on appliesTo rules.
- * Collection membership is pre-resolved via the lineCollections map.
+ * Check whether a promo applies to a given product.
+ * Collection-scoped promos have their productIds pre-resolved by the admin
+ * server at save time, so the Function only ever checks product GIDs.
  */
-function promoAppliesToLine(
-  promo: PromoCode,
-  productGid: string,
-  lineCollections: Set<string>,
-): boolean {
+function promoAppliesToProduct(promo: PromoCode, productGid: string): boolean {
   if (promo.appliesTo === "all") return true;
-  if (promo.appliesTo === "products") {
-    return (promo.productIds ?? []).includes(productGid);
-  }
-  if (promo.appliesTo === "collections") {
-    return (promo.collectionIds ?? []).some(cid => lineCollections.has(cid));
-  }
-  return false;
+  // Both "products" and "collections" scopes store resolved productIds
+  return (promo.productIds ?? []).includes(productGid);
 }
 
 // ── Main function ─────────────────────────────────────────────────────────────
@@ -158,26 +150,6 @@ export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsG
   for (const entered of (input as any).enteredDiscountCodes ?? []) {
     const match = promoCodes.get(String(entered.code).toUpperCase().trim());
     if (match) { activePromo = match; break; }
-  }
-
-  // ── 1. Build collection membership map per line ────────────────────────────
-  // The GraphQL query fetches inCollection per product. For collection-scoped
-  // promos we need to know which collections each product belongs to.
-  // Since Shopify Functions can only query one collection at a time via
-  // inCollection(id:), we store the collection IDs from the promo itself
-  // and rely on the admin UI saving the correct GIDs. At runtime we check
-  // the product's collectionMemberships if available, otherwise fall back
-  // to a server-side pre-check (handled below).
-  const lineCollectionsMap = new Map<string, Set<string>>();
-  for (const line of input.cart.lines) {
-    const product = (line.merchandise as any)?.product;
-    if (!product) continue;
-    const membershipSet = new Set<string>();
-    // collectionMemberships is available when queried via inCollection fields
-    for (const cm of (product.collectionMemberships ?? [])) {
-      if (cm.isMember) membershipSet.add(cm.collectionId);
-    }
-    lineCollectionsMap.set(line.id, membershipSet);
   }
 
   // ── 2. Group hat lines by (bundleId + patchType) ───────────────────────────

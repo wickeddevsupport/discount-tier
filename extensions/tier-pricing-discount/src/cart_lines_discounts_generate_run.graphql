@@ -13,9 +13,6 @@ query CartInput {
         amountPerQuantity {
           amount
         }
-        subtotalAmount {
-          amount
-        }
       }
       merchandise {
         ... on ProductVariant {
@@ -29,14 +26,8 @@ query CartInput {
             priceChart: metafield(namespace: "custom", key: "price_chart_tiers") {
               value
             }
-            inAnyCollection: inCollection(id: "gid://shopify/Collection/0")
           }
         }
-      }
-    }
-    cost {
-      subtotalAmount {
-        amount
       }
     }
   }
