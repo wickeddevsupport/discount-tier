@@ -31,11 +31,9 @@ query CartInput {
       }
     }
   }
-  enteredDiscountCodes {
-    code
-  }
-  shop {
-    promoCodes: metafield(namespace: "custom", key: "promo_codes") {
+  discount {
+    discountClasses
+    promo: metafield(namespace: "tier_pricing", key: "promo") {
       value
     }
   }

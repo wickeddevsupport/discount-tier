@@ -1,25 +1,43 @@
 import {
   Input,
   CartLinesDiscountsGenerateRunResult,
+  DiscountClass,
+  OrderDiscountSelectionStrategy,
   ProductDiscountSelectionStrategy,
-  ProductDiscountCandidateFixedAmount,
 } from "../generated/api";
 
-type Tier = {
-  qty: number;
-  price: number;
-};
+// This one function backs two kinds of discount:
+//
+//  1. The "Tier Pricing" AUTOMATIC discount (no promo metafield on it).
+//     -> discounts each line from its base price down to its tier price.
+//
+//  2. One CODE discount per promo code, created by the app's Promo Codes tab.
+//     The promo settings live in the discount's `tier_pricing.promo` metafield.
+//     -> discounts ONLY the promo portion, calculated on top of the tier price,
+//        so Tier Pricing + promo stack exactly like before.
+//
+// Promo codes must exist as real Shopify discount codes: in this target,
+// `enteredDiscountCodes` only contains codes Shopify itself knows about, so a
+// code that only lives in a metafield is never seen (and checkout rejects it).
 
-type PromoCode = {
+type Tier = { qty: number; price: number };
+
+type Promo = {
   code: string;
-  discountLevel: string;
-  type: string;
+  discountLevel: string; // "product" | "order"
+  type: string; // "percentage" | "fixed"
   value: number;
-  appliesTo: string;
-  productIds: string[];
-  collectionIds: string[];
+  appliesTo: string; // "all" | "products" | "collections"
+  productIds: string[]; // for "collections" the app resolves collection -> product IDs
   expires: string;
 };
+
+const ADDON_TIERS: Tier[] = [
+  { qty: 1, price: 5.0 },
+  { qty: 48, price: 4.5 },
+  { qty: 96, price: 4.0 },
+  { qty: 144, price: 3.5 },
+];
 
 function parsePriceChart(raw: string | null | undefined): Record<string, Tier[]> {
   if (!raw) return {};
@@ -27,7 +45,9 @@ function parsePriceChart(raw: string | null | undefined): Record<string, Tier[]>
   try {
     const parsed = JSON.parse(raw);
     charts = Array.isArray(parsed) ? parsed : [parsed];
-  } catch { return {}; }
+  } catch {
+    return {};
+  }
 
   const result: Record<string, Tier[]> = {};
   for (const chart of charts) {
@@ -58,262 +78,206 @@ function toPatchKey(patchType: string): string {
   return patchType.toLowerCase().trim().replace(/\s+/g, "-");
 }
 
-const ADDON_TIERS: Tier[] = [
-  { qty: 1,   price: 5.00 },
-  { qty: 48,  price: 4.50 },
-  { qty: 96,  price: 4.00 },
-  { qty: 144, price: 3.50 },
-];
-
-function parsePromoCodes(raw: string | null | undefined): PromoCode[] {
-  if (!raw) return [];
+function parsePromo(raw: string | null | undefined): Promo | null {
+  if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
+    const item = JSON.parse(raw);
+    if (!item || !item.code || !item.type || item.value == null) return null;
+    const value = parseFloat(item.value);
+    if (isNaN(value) || value <= 0) return null;
     const today = new Date().toISOString().slice(0, 10);
-    return parsed.filter((item: any) => {
-      if (!item || !item.code || !item.type || item.value == null) return false;
-      if (item.expires && String(item.expires) < today) return false;
-      return true;
-    }).map((item: any) => ({
+    if (item.expires && String(item.expires) < today) return null;
+    return {
       code: String(item.code).toUpperCase().trim(),
       discountLevel: String(item.discountLevel ?? "product"),
       type: String(item.type),
-      value: parseFloat(item.value),
+      value,
       appliesTo: String(item.appliesTo ?? "all"),
       productIds: Array.isArray(item.productIds) ? item.productIds.map(String) : [],
-      collectionIds: Array.isArray(item.collectionIds) ? item.collectionIds.map(String) : [],
       expires: String(item.expires ?? ""),
-    }));
-  } catch { return []; }
-}
-
-function findActivePromo(promoCodes: PromoCode[], enteredCodes: any[]): PromoCode | null {
-  if (!enteredCodes || !enteredCodes.length) return null;
-  for (const entered of enteredCodes) {
-    const code = String(entered?.code ?? "").toUpperCase().trim();
-    const match = promoCodes.find(p => p.code === code);
-    if (match) return match;
+    };
+  } catch {
+    return null;
   }
-  return null;
 }
 
-function promoAppliesToProduct(promo: PromoCode, productGid: string): boolean {
+function promoAppliesToProduct(promo: Promo, productGid: string): boolean {
   if (promo.appliesTo === "all") return true;
-  if (promo.appliesTo === "products") {
-    return promo.productIds.indexOf(productGid) !== -1;
-  }
-  // collections: handled via collectionIds — without inCollection query support,
-  // we skip collection filtering at runtime (all products match)
-  if (promo.appliesTo === "collections") return true;
-  return true;
+  // "products" and "collections" both use the resolved productIds list
+  return promo.productIds.indexOf(productGid) !== -1;
 }
 
-export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsGenerateRunResult {
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
 
-  // ── 0. Resolve active promo ────────────────────────────────────────────────
-  const promoRaw = (input as any)?.shop?.promoCodes?.value ?? null;
-  const promoCodes = parsePromoCodes(promoRaw);
-  const enteredCodes = (input as any)?.enteredDiscountCodes ?? [];
-  const activePromo = findActivePromo(promoCodes, enteredCodes);
+// Returns { lineId -> tier unit price } for every line that has tier pricing.
+function computeTierPrices(lines: any[]): Record<string, number> {
+  const tierPriceByLine: Record<string, number> = {};
 
-  // ── 1. Group hat lines by (bundleId + patchType) ───────────────────────────
-  type Group = { lines: typeof input.cart.lines; tiers: Tier[] };
-  const groups: Record<string, Group> = {};
-
-  for (const line of input.cart.lines) {
-    const variant = line.merchandise as any;
+  // ── Hat lines: group by (bundleId + patchType) ──
+  const groups: Record<string, { lines: any[]; tiers: Tier[] }> = {};
+  for (const line of lines) {
+    const variant = line.merchandise;
     const product = variant?.product;
     if (!product) continue;
-
-    const isAddon = (line as any).isAddon?.value === "true";
-    if (isAddon) continue;
+    if (line.isAddon?.value === "true") continue;
 
     const productId: string = product.id;
-    const bundleId: string = (line as any).attribute?.value ?? productId;
+    const bundleId: string = line.attribute?.value ?? productId;
 
-    const variantTitle: string = (variant?.title ?? "").toLowerCase();
+    const variantTitle: string = String(variant?.title ?? "").toLowerCase();
     let rawPatchType: string = product?.patchType?.value ?? "Embroidery";
     if (variantTitle.includes("vegan")) rawPatchType = "Vegan Leather";
     else if (variantTitle.includes("embroidery")) rawPatchType = "Embroidery";
 
     const patchKey = toPatchKey(rawPatchType);
-    const groupKey = `${bundleId}__${patchKey}`;
+    const groupKey = bundleId + "__" + patchKey;
 
     if (!groups[groupKey]) {
       const allTiers = parsePriceChart(product?.priceChart?.value ?? null);
       let tiers: Tier[] | undefined = allTiers[patchKey];
       if (!tiers) {
         const fallback = Object.keys(allTiers).find(
-          k => k.includes(patchKey) || patchKey.includes(k) || (k === "vegan" && patchKey === "vegan-leather")
+          (k) => k.includes(patchKey) || patchKey.includes(k) || (k === "vegan" && patchKey === "vegan-leather"),
         );
         if (fallback) tiers = allTiers[fallback];
       }
+      // Same as before: no chart on this line -> skip it, a later line in the group may supply one
       if (!tiers || !tiers.length) continue;
       groups[groupKey] = { lines: [], tiers };
     }
     groups[groupKey].lines.push(line);
   }
 
-  // ── 2. Build hat discount candidates ──────────────────────────────────────
-  const candidates: any[] = [];
-
-  for (const groupKey in groups) {
-    const { lines, tiers } = groups[groupKey];
-    const totalQty = lines.reduce((sum, l) => sum + l.quantity, 0);
-    const tierPrice = getTierPrice(totalQty, tiers);
-
-    for (const line of lines) {
-      const basePrice = parseFloat((line.cost as any).amountPerQuantity.amount);
-      const productGid: string = (line.merchandise as any)?.product?.id ?? "";
-
-      let effectivePrice = tierPrice;
-      let promoApplied = false;
-
-      if (activePromo && activePromo.discountLevel === "product" && promoAppliesToProduct(activePromo, productGid)) {
-        promoApplied = true;
-        if (activePromo.type === "percentage") {
-          effectivePrice = tierPrice * (1 - activePromo.value / 100);
-        } else {
-          effectivePrice = tierPrice - activePromo.value;
-          if (effectivePrice < 0) effectivePrice = 0;
-        }
-      }
-
-      const discountAmount = basePrice - effectivePrice;
-      if (discountAmount > 0) {
-        candidates.push({
-          targets: [{ cartLine: { id: line.id } }],
-          value: {
-            fixedAmount: {
-              amount: String(discountAmount.toFixed(2)),
-              appliesToEachItem: true,
-            } satisfies ProductDiscountCandidateFixedAmount,
-          },
-          message: promoApplied ? ("Tier Pricing + " + activePromo!.code) : "Tier Pricing",
-        });
-      }
-    }
+  for (const key in groups) {
+    const g = groups[key];
+    const totalQty = g.lines.reduce((sum: number, l: any) => sum + l.quantity, 0);
+    const tierPrice = getTierPrice(totalQty, g.tiers);
+    for (const line of g.lines) tierPriceByLine[line.id] = tierPrice;
   }
 
-  // ── 3. Addon lines ─────────────────────────────────────────────────────────
-  const addonGroups: Record<string, typeof input.cart.lines> = {};
-  for (const line of input.cart.lines) {
-    const isAddon = (line as any).isAddon?.value === "true";
-    if (!isAddon) continue;
-    const productId: string = (line.merchandise as any)?.product?.id ?? "unknown";
-    const bundleId: string = (line as any).attribute?.value ?? productId;
-    const key = `${bundleId}__${productId}`;
+  // ── Add-on lines: group by (bundleId + productId) ──
+  const addonGroups: Record<string, any[]> = {};
+  for (const line of lines) {
+    if (line.isAddon?.value !== "true") continue;
+    const productId: string = line.merchandise?.product?.id ?? "unknown";
+    const bundleId: string = line.attribute?.value ?? productId;
+    const key = bundleId + "__" + productId;
     if (!addonGroups[key]) addonGroups[key] = [];
     addonGroups[key].push(line);
   }
-
   for (const key in addonGroups) {
-    const lines = addonGroups[key];
-    const totalQty = lines.reduce((sum, l) => sum + l.quantity, 0);
+    const groupLines = addonGroups[key];
+    const totalQty = groupLines.reduce((sum: number, l: any) => sum + l.quantity, 0);
     const tierPrice = getTierPrice(totalQty, ADDON_TIERS);
+    for (const line of groupLines) tierPriceByLine[line.id] = tierPrice;
+  }
 
+  return tierPriceByLine;
+}
+
+export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsGenerateRunResult {
+  const data = input as any;
+  const lines: any[] = data?.cart?.lines ?? [];
+  const discountClasses: string[] = data?.discount?.discountClasses ?? [];
+  const hasProductClass = discountClasses.indexOf(DiscountClass.Product) !== -1;
+  const hasOrderClass = discountClasses.indexOf(DiscountClass.Order) !== -1;
+
+  if (!lines.length) return { operations: [] };
+
+  const tierPriceByLine = computeTierPrices(lines);
+  const promoRaw: string | null = data?.discount?.promo?.value ?? null;
+  const promo = parsePromo(promoRaw);
+
+  // A promo-code discount whose settings are invalid or expired gives nothing
+  // (it must never fall back to tier mode, or tier pricing would apply twice).
+  if (promoRaw && !promo) return { operations: [] };
+
+  // ── Mode 1: Tier Pricing automatic discount ─────────────────────────────
+  // Behaves exactly like the pre-promo version (no discount-class check here on purpose).
+  if (!promo) {
+    const candidates: any[] = [];
     for (const line of lines) {
-      const basePrice = parseFloat((line.cost as any).amountPerQuantity.amount);
-      const productGid: string = (line.merchandise as any)?.product?.id ?? "";
-
-      let effectivePrice = tierPrice;
-      let promoApplied = false;
-
-      if (activePromo && activePromo.discountLevel === "product" && promoAppliesToProduct(activePromo, productGid)) {
-        promoApplied = true;
-        if (activePromo.type === "percentage") {
-          effectivePrice = tierPrice * (1 - activePromo.value / 100);
-        } else {
-          effectivePrice = tierPrice - activePromo.value;
-          if (effectivePrice < 0) effectivePrice = 0;
-        }
-      }
-
-      const discountAmount = basePrice - effectivePrice;
-      if (discountAmount > 0) {
+      const tierPrice = tierPriceByLine[line.id];
+      if (tierPrice === undefined) continue;
+      const basePrice = parseFloat(line.cost.amountPerQuantity.amount);
+      const discountPerItem = round2(basePrice - tierPrice);
+      if (discountPerItem > 0) {
         candidates.push({
           targets: [{ cartLine: { id: line.id } }],
-          value: {
-            fixedAmount: {
-              amount: String(discountAmount.toFixed(2)),
-              appliesToEachItem: true,
-            } satisfies ProductDiscountCandidateFixedAmount,
-          },
-          message: promoApplied ? ("Tier Pricing + " + activePromo!.code) : "Tier Pricing",
+          value: { fixedAmount: { amount: discountPerItem.toFixed(2), appliesToEachItem: true } },
+          message: "Tier Pricing",
         });
       }
     }
+    if (!candidates.length) return { operations: [] };
+    return {
+      operations: [
+        { productDiscountsAdd: { candidates, selectionStrategy: ProductDiscountSelectionStrategy.All } },
+      ],
+    } as any;
   }
 
-  if (!candidates.length) return { operations: [] };
+  // ── Mode 2: promo code discount (calculated on top of the tier price) ────
+  // Unit price after tier pricing (lines with no tier pricing keep their price).
+  function unitAfterTier(line: any): number {
+    const tierPrice = tierPriceByLine[line.id];
+    const basePrice = parseFloat(line.cost.amountPerQuantity.amount);
+    return tierPrice === undefined ? basePrice : Math.min(basePrice, tierPrice);
+  }
 
-  const operations: any[] = [
-    {
-      productDiscountsAdd: {
-        candidates,
-        selectionStrategy: ProductDiscountSelectionStrategy.All,
-      },
-    },
-  ];
-
-  // ── 4. Order-level promo ───────────────────────────────────────────────────
-  if (activePromo && activePromo.discountLevel === "order") {
-    // Calculate post-tier subtotal
+  if (promo.discountLevel === "order") {
+    if (!hasOrderClass) return { operations: [] };
     let subtotal = 0;
-    for (const groupKey in groups) {
-      const { lines, tiers } = groups[groupKey];
-      const totalQty = lines.reduce((sum, l) => sum + l.quantity, 0);
-      const tierPrice = getTierPrice(totalQty, tiers);
-      for (const line of lines) {
-        subtotal += tierPrice * line.quantity;
-      }
-    }
-    for (const key in addonGroups) {
-      const lines = addonGroups[key];
-      const totalQty = lines.reduce((sum, l) => sum + l.quantity, 0);
-      const tierPrice = getTierPrice(totalQty, ADDON_TIERS);
-      for (const line of lines) {
-        subtotal += tierPrice * line.quantity;
-      }
-    }
+    for (const line of lines) subtotal += unitAfterTier(line) * line.quantity;
+    if (subtotal <= 0) return { operations: [] };
 
-    let orderDiscountAmount = 0;
-    if (activePromo.type === "percentage") {
-      orderDiscountAmount = subtotal * (activePromo.value / 100);
-    } else {
-      orderDiscountAmount = activePromo.value;
-      if (orderDiscountAmount > subtotal) orderDiscountAmount = subtotal;
-    }
+    const value =
+      promo.type === "percentage"
+        ? { percentage: { value: Math.min(promo.value, 100) } }
+        : { fixedAmount: { amount: Math.min(promo.value, subtotal).toFixed(2) } };
 
-    if (orderDiscountAmount > 0) {
-      operations.push({
-        orderDiscountsAdd: {
-          candidates: [
-            {
-              message: activePromo.code,
-              targets: [{ orderSubtotal: { excludedCartLineIds: [] } }],
-              value: {
-                fixedAmount: {
-                  amount: String(orderDiscountAmount.toFixed(2)),
-                },
+    return {
+      operations: [
+        {
+          orderDiscountsAdd: {
+            candidates: [
+              {
+                message: promo.code,
+                targets: [{ orderSubtotal: { excludedCartLineIds: [] } }],
+                value,
               },
-            },
-          ],
-          selectionStrategy: ProductDiscountSelectionStrategy.All,
+            ],
+            selectionStrategy: OrderDiscountSelectionStrategy.First,
+          },
         },
+      ],
+    } as any;
+  }
+
+  // Product-level promo
+  if (!hasProductClass) return { operations: [] };
+  const candidates: any[] = [];
+  for (const line of lines) {
+    const productGid: string = line.merchandise?.product?.id ?? "";
+    if (!productGid || !promoAppliesToProduct(promo, productGid)) continue;
+    const unit = unitAfterTier(line);
+    const discountPerItem = round2(
+      promo.type === "percentage" ? unit * (Math.min(promo.value, 100) / 100) : Math.min(promo.value, unit),
+    );
+    if (discountPerItem > 0) {
+      candidates.push({
+        targets: [{ cartLine: { id: line.id } }],
+        value: { fixedAmount: { amount: discountPerItem.toFixed(2), appliesToEachItem: true } },
+        message: promo.code,
       });
     }
   }
-
-  // ── 5. Accept promo code ───────────────────────────────────────────────────
-  if (activePromo) {
-    operations.push({
-      enteredDiscountCodesAccept: {
-        codes: [{ code: activePromo.code }],
-      },
-    });
-  }
-
-  return { operations };
+  if (!candidates.length) return { operations: [] };
+  return {
+    operations: [
+      { productDiscountsAdd: { candidates, selectionStrategy: ProductDiscountSelectionStrategy.All } },
+    ],
+  } as any;
 }

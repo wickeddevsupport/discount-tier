@@ -79,6 +79,11 @@ app.get("/callback", async (req, res) => {
           functionId: "${fn.id}"
           startsAt: "2024-01-01T00:00:00Z"
           discountClasses: [PRODUCT]
+          combinesWith: {
+            orderDiscounts: true
+            productDiscounts: true
+            shippingDiscounts: true
+          }
         }) {
           automaticAppDiscount { discountId }
           userErrors { field message }
@@ -239,7 +244,60 @@ app.post("/api/product/:id/tiers", async (req, res) => {
   res.json({ ok: true });
 });
 
-// ── API: get promo codes ───────────────────────────────────────────────────
+// ── One-time fix: update existing Tier Pricing discount combinations ──────────
+
+app.get("/api/fix-discount-combinations", async (req, res) => {
+  const { shop } = req.query;
+  const token = tokenStore[shop];
+  if (!token) return res.status(401).json({ error: "Not authenticated" });
+
+  // Find the existing Tier Pricing automatic discount
+  const listData = await gql(shop, token, `{
+    automaticDiscountNodes(first: 20) {
+      nodes {
+        id
+        automaticDiscount {
+          ... on DiscountAutomaticApp {
+            title
+            discountId
+          }
+        }
+      }
+    }
+  }`);
+
+  const nodes = listData?.data?.automaticDiscountNodes?.nodes ?? [];
+  const tierNode = nodes.find((n) => {
+    const d = n?.automaticDiscount;
+    return d?.title?.toLowerCase().includes("tier");
+  });
+
+  if (!tierNode) return res.json({ ok: false, error: "Tier Pricing discount not found" });
+
+  const discountId = tierNode.id;
+
+  const updateData = await gql(shop, token, `
+    mutation discountAutomaticAppUpdate($id: ID!, $automaticAppDiscount: DiscountAutomaticAppInput!) {
+      discountAutomaticAppUpdate(id: $id, automaticAppDiscount: $automaticAppDiscount) {
+        automaticAppDiscount { discountId }
+        userErrors { field message }
+      }
+    }
+  `, {
+    id: discountId,
+    automaticAppDiscount: {
+      combinesWith: {
+        orderDiscounts: true,
+        productDiscounts: true,
+        shippingDiscounts: true,
+      },
+    },
+  });
+
+  const errors = updateData?.data?.discountAutomaticAppUpdate?.userErrors ?? [];
+  if (errors.length) return res.json({ ok: false, error: errors[0].message });
+  res.json({ ok: true, message: "Tier Pricing discount combinations updated" });
+});
 
 app.get("/api/promo-codes", async (req, res) => {
   const { shop } = req.query;
@@ -262,6 +320,159 @@ app.get("/api/promo-codes", async (req, res) => {
   res.json({ codes });
 });
 
+// ── Promo codes → real Shopify code discounts ─────────────────────────────
+//
+// Shopify only lets a discount function see codes that exist in Shopify, so
+// every promo code is also created as a code discount backed by our function.
+// Its settings live in the discount's `tier_pricing.promo` metafield, and the
+// function applies the promo on top of the tier price.
+
+const PROMO_TITLE_PREFIX = "Promo code (Tier Pricing): ";
+const FUNCTION_HANDLE = "tier-pricing-discount"; // handle in extensions/tier-pricing-discount/shopify.extension.toml
+
+async function findCodeDiscount(shop, token, code) {
+  const data = await gql(shop, token, `
+    query($code: String!) {
+      codeDiscountNodeByCode(code: $code) {
+        id
+        codeDiscount { __typename ... on DiscountCodeApp { title } }
+      }
+    }
+  `, { code });
+  return data?.data?.codeDiscountNodeByCode ?? null;
+}
+
+function isOurPromoDiscount(node) {
+  return node?.codeDiscount?.__typename === "DiscountCodeApp" &&
+    String(node.codeDiscount.title ?? "").startsWith(PROMO_TITLE_PREFIX);
+}
+
+async function resolveCollectionProductIds(shop, token, collectionIds) {
+  const ids = [];
+  for (const collectionId of collectionIds) {
+    let after = null;
+    for (let page = 0; page < 20; page++) {
+      const data = await gql(shop, token, `
+        query($id: ID!, $after: String) {
+          collection(id: $id) {
+            products(first: 250, after: $after) { nodes { id } pageInfo { hasNextPage endCursor } }
+          }
+        }
+      `, { id: collectionId, after });
+      const products = data?.data?.collection?.products;
+      if (!products) break;
+      for (const p of products.nodes) if (!ids.includes(p.id)) ids.push(p.id);
+      if (!products.pageInfo.hasNextPage) break;
+      after = products.pageInfo.endCursor;
+    }
+  }
+  return ids;
+}
+
+async function syncOnePromo(shop, token, promo) {
+  const code = String(promo.code).toUpperCase().trim();
+  const isOrder = promo.discountLevel === "order";
+
+  // Settings the function reads. Collections are resolved to product IDs here.
+  let productIds = Array.isArray(promo.productIds) ? promo.productIds : [];
+  if (!isOrder && promo.appliesTo === "collections") {
+    productIds = await resolveCollectionProductIds(shop, token, promo.collectionIds ?? []);
+  }
+  const config = {
+    code,
+    discountLevel: isOrder ? "order" : "product",
+    type: promo.type,
+    value: promo.value,
+    appliesTo: isOrder ? "all" : (promo.appliesTo ?? "all"),
+    productIds,
+    expires: promo.expires ?? "",
+  };
+
+  const discountInput = {
+    title: PROMO_TITLE_PREFIX + code,
+    discountClasses: [isOrder ? "ORDER" : "PRODUCT"],
+    // Must combine with product discounts so it stacks with the Tier Pricing automatic discount.
+    combinesWith: { productDiscounts: true, orderDiscounts: !isOrder, shippingDiscounts: true },
+    endsAt: promo.expires ? `${promo.expires}T23:59:59Z` : null,
+  };
+  const configMetafield = { namespace: "tier_pricing", key: "promo", type: "json", value: JSON.stringify(config) };
+
+  const existing = await findCodeDiscount(shop, token, code);
+
+  if (existing && !isOurPromoDiscount(existing)) {
+    return `${code}: this code is already used by another discount in Shopify. Delete or rename that one first.`;
+  }
+
+  if (existing) {
+    const data = await gql(shop, token, `
+      mutation($id: ID!, $d: DiscountCodeAppInput!) {
+        discountCodeAppUpdate(id: $id, codeAppDiscount: $d) { userErrors { field message } }
+      }
+    `, { id: existing.id, d: discountInput });
+    const errs = data?.data?.discountCodeAppUpdate?.userErrors ?? data?.errors ?? [];
+    if (errs.length) return `${code}: ${errs[0].message}`;
+
+    const mf = await gql(shop, token, `
+      mutation($m: [MetafieldsSetInput!]!) { metafieldsSet(metafields: $m) { userErrors { field message } } }
+    `, { m: [{ ownerId: existing.id, ...configMetafield }] });
+    const mfErrs = mf?.data?.metafieldsSet?.userErrors ?? mf?.errors ?? [];
+    return mfErrs.length ? `${code}: ${mfErrs[0].message}` : null;
+  }
+
+  const data = await gql(shop, token, `
+    mutation($d: DiscountCodeAppInput!) {
+      discountCodeAppCreate(codeAppDiscount: $d) {
+        codeAppDiscount { discountId }
+        userErrors { field message }
+      }
+    }
+  `, {
+    d: {
+      ...discountInput,
+      functionHandle: FUNCTION_HANDLE,
+      code,
+      startsAt: new Date().toISOString(),
+      context: { all: "ALL" },
+      metafields: [configMetafield],
+    },
+  });
+  const errs = data?.data?.discountCodeAppCreate?.userErrors ?? data?.errors ?? [];
+  return errs.length ? `${code}: ${errs[0].message}` : null;
+}
+
+async function deletePromoDiscount(shop, token, code) {
+  const existing = await findCodeDiscount(shop, token, String(code).toUpperCase().trim());
+  if (!existing || !isOurPromoDiscount(existing)) return null; // never touch discounts we didn't create
+  const data = await gql(shop, token, `
+    mutation($id: ID!) { discountCodeDelete(id: $id) { userErrors { field message } } }
+  `, { id: existing.id });
+  const errs = data?.data?.discountCodeDelete?.userErrors ?? data?.errors ?? [];
+  return errs.length ? `${code}: ${errs[0].message}` : null;
+}
+
+async function syncPromoCodes(shop, token, codes, previousCodes = []) {
+  const errors = [];
+  for (const promo of codes) {
+    const err = await syncOnePromo(shop, token, promo);
+    if (err) errors.push(err);
+  }
+  const keep = codes.map(c => String(c.code).toUpperCase().trim());
+  for (const old of previousCodes) {
+    const oldCode = String(old.code).toUpperCase().trim();
+    if (keep.includes(oldCode)) continue;
+    const err = await deletePromoDiscount(shop, token, oldCode);
+    if (err) errors.push(err);
+  }
+  return errors;
+}
+
+async function readPromoMetafield(shop, token) {
+  const data = await gql(shop, token, `{ shop { id metafield(namespace: "custom", key: "promo_codes") { value } } }`);
+  let codes = [];
+  try { codes = JSON.parse(data?.data?.shop?.metafield?.value ?? "[]"); } catch { codes = []; }
+  return { shopId: data?.data?.shop?.id, codes: Array.isArray(codes) ? codes : [] };
+}
+
 // ── API: save promo codes (full replace) ──────────────────────────────────
 
 app.post("/api/promo-codes", async (req, res) => {
@@ -272,11 +483,17 @@ app.post("/api/promo-codes", async (req, res) => {
   const { codes } = req.body; // array of PromoCode objects
   if (!Array.isArray(codes)) return res.status(400).json({ error: "codes must be an array" });
 
-  // Get shop GID first
-  const shopData = await gql(shop, token, `{ shop { id } }`);
-  const shopId = shopData?.data?.shop?.id;
+  const { shopId, codes: previousCodes } = await readPromoMetafield(shop, token);
   if (!shopId) return res.status(500).json({ error: "Could not get shop ID" });
 
+  // 1. Create / update / delete the real Shopify code discounts
+  const syncErrors = await syncPromoCodes(shop, token, codes, previousCodes);
+  if (syncErrors.length) {
+    console.log("Promo sync errors:", syncErrors);
+    return res.json({ ok: false, error: syncErrors.join(" | ") });
+  }
+
+  // 2. Save the list for the admin UI
   const data = await gql(shop, token, `
     mutation metafieldsSet($metafields: [MetafieldsSetInput!]!) {
       metafieldsSet(metafields: $metafields) {
@@ -297,6 +514,17 @@ app.post("/api/promo-codes", async (req, res) => {
   const errors = data?.data?.metafieldsSet?.userErrors ?? [];
   if (errors.length) return res.json({ ok: false, error: errors[0].message });
   res.json({ ok: true });
+});
+
+// ── One-time: create Shopify code discounts for promo codes saved before this fix ──
+
+app.get("/api/promo-codes/sync", async (req, res) => {
+  const { shop } = req.query;
+  const token = tokenStore[shop];
+  if (!token) return res.status(401).json({ error: "Not authenticated. Please reinstall the app." });
+  const { codes } = await readPromoMetafield(shop, token);
+  const errors = await syncPromoCodes(shop, token, codes, []);
+  res.json({ ok: errors.length === 0, synced: codes.map(c => c.code), errors });
 });
 
 app.listen(PORT, () => {
