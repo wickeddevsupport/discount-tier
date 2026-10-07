@@ -245,6 +245,7 @@ app.post("/api/product/:id/tiers", async (req, res) => {
 });
 
 // Finds this app's automatic discount(s) (Tier Pricing) by app key, not by title.
+// Uses discountNodes (covers every discount type) and also returns everything it saw.
 async function findTierAutomaticDiscounts(shop, token) {
   const found = [];
   const seen = [];
@@ -252,31 +253,39 @@ async function findTierAutomaticDiscounts(shop, token) {
   for (let page = 0; page < 10; page++) {
     const data = await gql(shop, token, `
       query($after: String) {
-        automaticDiscountNodes(first: 100, after: $after) {
+        discountNodes(first: 100, after: $after) {
           nodes {
             id
-            automaticDiscount {
+            discount {
               __typename
               ... on DiscountAutomaticApp {
+                discountId
                 title
                 status
                 discountClasses
                 combinesWith { productDiscounts orderDiscounts shippingDiscounts }
                 appDiscountType { appKey functionId title }
               }
+              ... on DiscountCodeApp { title status appDiscountType { appKey } }
+              ... on DiscountAutomaticBasic { title status }
+              ... on DiscountAutomaticBxgy { title status }
+              ... on DiscountAutomaticFreeShipping { title status }
+              ... on DiscountCodeBasic { title status }
+              ... on DiscountCodeBxgy { title status }
+              ... on DiscountCodeFreeShipping { title status }
             }
           }
           pageInfo { hasNextPage endCursor }
         }
       }
     `, { after });
-    if (data?.errors) return { found, seen, errors: data.errors };
-    const conn = data?.data?.automaticDiscountNodes;
+    if (data?.errors) return { found, seen, errors: Array.isArray(data.errors) ? data.errors : [{ message: String(data.errors) }] };
+    const conn = data?.data?.discountNodes;
     for (const n of conn?.nodes ?? []) {
-      const d = n.automaticDiscount;
-      if (d?.__typename !== "DiscountAutomaticApp") continue;
-      seen.push({ id: n.id, title: d.title, status: d.status, appKey: d.appDiscountType?.appKey });
-      if (d.appDiscountType?.appKey === CLIENT_ID) found.push({ id: n.id, ...d });
+      const d = n.discount ?? {};
+      seen.push({ id: n.id, type: d.__typename, title: d.title, status: d.status, appKey: d.appDiscountType?.appKey ?? null });
+      // discountAutomaticAppUpdate needs the DiscountAutomaticNode id, which discountId holds
+      if (d.__typename === "DiscountAutomaticApp" && d.appDiscountType?.appKey === CLIENT_ID) found.push({ ...d, id: d.discountId ?? n.id.replace("/DiscountNode/", "/DiscountAutomaticNode/") });
     }
     if (!conn?.pageInfo?.hasNextPage) break;
     after = conn.pageInfo.endCursor;
@@ -296,7 +305,7 @@ app.get("/api/debug/discounts", async (req, res) => {
     const node = await findCodeDiscount(shop, token, String(c.code).toUpperCase().trim());
     promoInShopify.push({ code: c.code, existsInShopify: !!node, createdByThisApp: isOurPromoDiscount(node) });
   }
-  res.json({ tierAutomaticDiscounts: auto.found, otherAppAutomaticDiscounts: auto.seen.filter(s => s.appKey !== CLIENT_ID), errors: auto.errors, promoCodes: promoInShopify });
+  res.json({ appClientIdUsed: CLIENT_ID, tierAutomaticDiscounts: auto.found, allDiscountsSeen: auto.seen, errors: auto.errors, promoCodes: promoInShopify });
 });
 
 // ── One-time fix: let the Tier Pricing discount combine with promo codes ──────
@@ -308,7 +317,7 @@ app.get("/api/fix-discount-combinations", async (req, res) => {
 
   const { found, seen, errors: listErrors } = await findTierAutomaticDiscounts(shop, token);
   if (listErrors) return res.json({ ok: false, error: listErrors[0]?.message ?? "Could not list discounts" });
-  if (!found.length) return res.json({ ok: false, error: "Tier Pricing discount not found", automaticAppDiscountsSeen: seen });
+  if (!found.length) return res.json({ ok: false, error: "Tier Pricing discount not found", appClientIdUsed: CLIENT_ID, discountsSeen: seen });
 
   const results = [];
   for (const d of found) {
