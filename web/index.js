@@ -244,59 +244,93 @@ app.post("/api/product/:id/tiers", async (req, res) => {
   res.json({ ok: true });
 });
 
-// ── One-time fix: update existing Tier Pricing discount combinations ──────────
+// Finds this app's automatic discount(s) (Tier Pricing) by app key, not by title.
+async function findTierAutomaticDiscounts(shop, token) {
+  const found = [];
+  const seen = [];
+  let after = null;
+  for (let page = 0; page < 10; page++) {
+    const data = await gql(shop, token, `
+      query($after: String) {
+        automaticDiscountNodes(first: 100, after: $after) {
+          nodes {
+            id
+            automaticDiscount {
+              __typename
+              ... on DiscountAutomaticApp {
+                title
+                status
+                discountClasses
+                combinesWith { productDiscounts orderDiscounts shippingDiscounts }
+                appDiscountType { appKey functionId title }
+              }
+            }
+          }
+          pageInfo { hasNextPage endCursor }
+        }
+      }
+    `, { after });
+    if (data?.errors) return { found, seen, errors: data.errors };
+    const conn = data?.data?.automaticDiscountNodes;
+    for (const n of conn?.nodes ?? []) {
+      const d = n.automaticDiscount;
+      if (d?.__typename !== "DiscountAutomaticApp") continue;
+      seen.push({ id: n.id, title: d.title, status: d.status, appKey: d.appDiscountType?.appKey });
+      if (d.appDiscountType?.appKey === CLIENT_ID) found.push({ id: n.id, ...d });
+    }
+    if (!conn?.pageInfo?.hasNextPage) break;
+    after = conn.pageInfo.endCursor;
+  }
+  return { found, seen, errors: null };
+}
+
+// Read-only: shows this app's discounts so we can check setup without the Shopify admin.
+app.get("/api/debug/discounts", async (req, res) => {
+  const { shop } = req.query;
+  const token = tokenStore[shop];
+  if (!token) return res.status(401).json({ error: "Not authenticated" });
+  const auto = await findTierAutomaticDiscounts(shop, token);
+  const { codes } = await readPromoMetafield(shop, token);
+  const promoInShopify = [];
+  for (const c of codes) {
+    const node = await findCodeDiscount(shop, token, String(c.code).toUpperCase().trim());
+    promoInShopify.push({ code: c.code, existsInShopify: !!node, createdByThisApp: isOurPromoDiscount(node) });
+  }
+  res.json({ tierAutomaticDiscounts: auto.found, otherAppAutomaticDiscounts: auto.seen.filter(s => s.appKey !== CLIENT_ID), errors: auto.errors, promoCodes: promoInShopify });
+});
+
+// ── One-time fix: let the Tier Pricing discount combine with promo codes ──────
 
 app.get("/api/fix-discount-combinations", async (req, res) => {
   const { shop } = req.query;
   const token = tokenStore[shop];
   if (!token) return res.status(401).json({ error: "Not authenticated" });
 
-  // Find the existing Tier Pricing automatic discount
-  const listData = await gql(shop, token, `{
-    automaticDiscountNodes(first: 20) {
-      nodes {
-        id
-        automaticDiscount {
-          ... on DiscountAutomaticApp {
-            title
-            discountId
-          }
+  const { found, seen, errors: listErrors } = await findTierAutomaticDiscounts(shop, token);
+  if (listErrors) return res.json({ ok: false, error: listErrors[0]?.message ?? "Could not list discounts" });
+  if (!found.length) return res.json({ ok: false, error: "Tier Pricing discount not found", automaticAppDiscountsSeen: seen });
+
+  const results = [];
+  for (const d of found) {
+    const updateData = await gql(shop, token, `
+      mutation discountAutomaticAppUpdate($id: ID!, $automaticAppDiscount: DiscountAutomaticAppInput!) {
+        discountAutomaticAppUpdate(id: $id, automaticAppDiscount: $automaticAppDiscount) {
+          automaticAppDiscount { title combinesWith { productDiscounts orderDiscounts shippingDiscounts } }
+          userErrors { field message }
         }
       }
-    }
-  }`);
-
-  const nodes = listData?.data?.automaticDiscountNodes?.nodes ?? [];
-  const tierNode = nodes.find((n) => {
-    const d = n?.automaticDiscount;
-    return d?.title?.toLowerCase().includes("tier");
-  });
-
-  if (!tierNode) return res.json({ ok: false, error: "Tier Pricing discount not found" });
-
-  const discountId = tierNode.id;
-
-  const updateData = await gql(shop, token, `
-    mutation discountAutomaticAppUpdate($id: ID!, $automaticAppDiscount: DiscountAutomaticAppInput!) {
-      discountAutomaticAppUpdate(id: $id, automaticAppDiscount: $automaticAppDiscount) {
-        automaticAppDiscount { discountId }
-        userErrors { field message }
-      }
-    }
-  `, {
-    id: discountId,
-    automaticAppDiscount: {
-      combinesWith: {
-        orderDiscounts: true,
-        productDiscounts: true,
-        shippingDiscounts: true,
+    `, {
+      id: d.id,
+      automaticAppDiscount: {
+        combinesWith: { orderDiscounts: true, productDiscounts: true, shippingDiscounts: true },
       },
-    },
-  });
-
-  const errors = updateData?.data?.discountAutomaticAppUpdate?.userErrors ?? [];
-  if (errors.length) return res.json({ ok: false, error: errors[0].message });
-  res.json({ ok: true, message: "Tier Pricing discount combinations updated" });
+    });
+    const errs = updateData?.data?.discountAutomaticAppUpdate?.userErrors ?? updateData?.errors ?? [];
+    results.push(errs.length
+      ? { title: d.title, ok: false, error: errs[0].message }
+      : { title: d.title, ok: true, combinesWith: updateData.data.discountAutomaticAppUpdate.automaticAppDiscount.combinesWith });
+  }
+  res.json({ ok: results.every(r => r.ok), results });
 });
 
 app.get("/api/promo-codes", async (req, res) => {
