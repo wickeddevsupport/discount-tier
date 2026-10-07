@@ -121,8 +121,8 @@
             <div class="form-group">
               <label>Discount Level</label>
               <select id="promoLevel" onchange="onLevelChange()">
-                <option value="product">Product Discount</option>
-                <option value="order">Order Discount</option>
+                <option value="product">Selected products (all or specific)</option>
+                <option value="order">Entire order</option>
               </select>
             </div>
             <div class="form-group">
@@ -142,7 +142,8 @@
             </div>
           </div>
 
-          <!-- Applies To (product level only) -->
+          <!-- Applies To (product level only). Either way the code is applied in Shopify as an order discount
+               (so it stacks with Tier Pricing); for "Selected products" only matching lines are discounted. -->
           <div class="form-row" id="appliesToRow">
             <div class="form-group" style="min-width:180px">
               <label>Applies To</label>

@@ -181,7 +181,6 @@ export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsG
   const data = input as any;
   const lines: any[] = data?.cart?.lines ?? [];
   const discountClasses: string[] = data?.discount?.discountClasses ?? [];
-  const hasProductClass = discountClasses.indexOf(DiscountClass.Product) !== -1;
   const hasOrderClass = discountClasses.indexOf(DiscountClass.Order) !== -1;
 
   if (!lines.length) return { operations: [] };
@@ -219,65 +218,62 @@ export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsG
     } as any;
   }
 
-  // ── Mode 2: promo code discount (calculated on top of the tier price) ────
-  // Unit price after tier pricing (lines with no tier pricing keep their price).
+  // ── Mode 2: promo code discount ─────────────────────────────────────────
+  // Always emitted as an ORDER discount. Shopify (non-Plus) won't put two product
+  // discounts on the same line, so a product-level promo would be rejected next to
+  // Tier Pricing. Order discounts are applied AFTER product discounts, so the promo
+  // is still calculated on the tier price. "Product-level" promos only count the
+  // matching lines (all other lines are excluded from the order discount).
+  if (!hasOrderClass) return { operations: [] };
+
   function unitAfterTier(line: any): number {
     const tierPrice = tierPriceByLine[line.id];
     const basePrice = parseFloat(line.cost.amountPerQuantity.amount);
     return tierPrice === undefined ? basePrice : Math.min(basePrice, tierPrice);
   }
 
-  if (promo.discountLevel === "order") {
-    if (!hasOrderClass) return { operations: [] };
-    let subtotal = 0;
-    for (const line of lines) subtotal += unitAfterTier(line) * line.quantity;
-    if (subtotal <= 0) return { operations: [] };
-
-    const value =
-      promo.type === "percentage"
-        ? { percentage: { value: Math.min(promo.value, 100) } }
-        : { fixedAmount: { amount: Math.min(promo.value, subtotal).toFixed(2) } };
-
-    return {
-      operations: [
-        {
-          orderDiscountsAdd: {
-            candidates: [
-              {
-                message: promo.code,
-                targets: [{ orderSubtotal: { excludedCartLineIds: [] } }],
-                value,
-              },
-            ],
-            selectionStrategy: OrderDiscountSelectionStrategy.First,
-          },
-        },
-      ],
-    } as any;
-  }
-
-  // Product-level promo
-  if (!hasProductClass) return { operations: [] };
-  const candidates: any[] = [];
+  const excludedCartLineIds: string[] = [];
+  let eligibleSubtotal = 0;
+  let fixedTotal = 0;
   for (const line of lines) {
     const productGid: string = line.merchandise?.product?.id ?? "";
-    if (!productGid || !promoAppliesToProduct(promo, productGid)) continue;
-    const unit = unitAfterTier(line);
-    const discountPerItem = round2(
-      promo.type === "percentage" ? unit * (Math.min(promo.value, 100) / 100) : Math.min(promo.value, unit),
-    );
-    if (discountPerItem > 0) {
-      candidates.push({
-        targets: [{ cartLine: { id: line.id } }],
-        value: { fixedAmount: { amount: discountPerItem.toFixed(2), appliesToEachItem: true } },
-        message: promo.code,
-      });
+    const eligible =
+      promo.discountLevel === "order" || (productGid !== "" && promoAppliesToProduct(promo, productGid));
+    if (!eligible) {
+      excludedCartLineIds.push(line.id);
+      continue;
     }
+    const unit = unitAfterTier(line);
+    eligibleSubtotal += unit * line.quantity;
+    fixedTotal += Math.min(promo.value, unit) * line.quantity;
   }
-  if (!candidates.length) return { operations: [] };
+  if (eligibleSubtotal <= 0) return { operations: [] };
+
+  let value: any;
+  if (promo.type === "percentage") {
+    value = { percentage: { value: Math.min(promo.value, 100) } };
+  } else if (promo.discountLevel === "order") {
+    // fixed amount off the whole order
+    value = { fixedAmount: { amount: Math.min(promo.value, eligibleSubtotal).toFixed(2) } };
+  } else {
+    // fixed amount off EACH matching item
+    value = { fixedAmount: { amount: Math.min(round2(fixedTotal), eligibleSubtotal).toFixed(2) } };
+  }
+
   return {
     operations: [
-      { productDiscountsAdd: { candidates, selectionStrategy: ProductDiscountSelectionStrategy.All } },
+      {
+        orderDiscountsAdd: {
+          candidates: [
+            {
+              message: promo.code,
+              targets: [{ orderSubtotal: { excludedCartLineIds } }],
+              value,
+            },
+          ],
+          selectionStrategy: OrderDiscountSelectionStrategy.First,
+        },
+      },
     ],
   } as any;
 }

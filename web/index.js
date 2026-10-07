@@ -378,7 +378,7 @@ async function findCodeDiscount(shop, token, code) {
     query($code: String!) {
       codeDiscountNodeByCode(code: $code) {
         id
-        codeDiscount { __typename ... on DiscountCodeApp { title } }
+        codeDiscount { __typename ... on DiscountCodeApp { title discountClasses } }
       }
     }
   `, { code });
@@ -433,14 +433,25 @@ async function syncOnePromo(shop, token, promo) {
 
   const discountInput = {
     title: PROMO_TITLE_PREFIX + code,
-    discountClasses: [isOrder ? "ORDER" : "PRODUCT"],
-    // Must combine with product discounts so it stacks with the Tier Pricing automatic discount.
-    combinesWith: { productDiscounts: true, orderDiscounts: !isOrder, shippingDiscounts: true },
+    // Always an ORDER discount: without Shopify Plus, two product discounts can't apply
+    // to the same item, so a product-class promo would be rejected next to Tier Pricing.
+    // The function still limits "product" promos to the matching products.
+    discountClasses: ["ORDER"],
+    // Combines with product discounts (Tier Pricing); not with other order codes.
+    combinesWith: { productDiscounts: true, orderDiscounts: false, shippingDiscounts: true },
     endsAt: promo.expires ? `${promo.expires}T23:59:59Z` : null,
   };
   const configMetafield = { namespace: "tier_pricing", key: "promo", type: "json", value: JSON.stringify(config) };
 
-  const existing = await findCodeDiscount(shop, token, code);
+  let existing = await findCodeDiscount(shop, token, code);
+
+  // Promo codes created before the switch to ORDER class: recreate them.
+  if (existing && isOurPromoDiscount(existing) &&
+      !(existing.codeDiscount.discountClasses ?? []).every(c => c === "ORDER")) {
+    const del = await deletePromoDiscount(shop, token, code);
+    if (del) return del;
+    existing = null;
+  }
 
   if (existing && !isOurPromoDiscount(existing)) {
     return `${code}: this code is already used by another discount in Shopify. Delete or rename that one first.`;
