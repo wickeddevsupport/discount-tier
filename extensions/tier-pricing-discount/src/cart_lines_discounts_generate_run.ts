@@ -30,6 +30,7 @@ type Promo = {
   appliesTo: string; // "all" | "products" | "collections"
   productIds: string[]; // for "collections" the app resolves collection -> product IDs
   expires: string;
+  minQty: number; // minimum number of hats ("Hat Product" tag, add-ons excluded); 0 = no minimum
 };
 
 const ADDON_TIERS: Tier[] = [
@@ -95,6 +96,7 @@ function parsePromo(raw: string | null | undefined): Promo | null {
       appliesTo: String(item.appliesTo ?? "all"),
       productIds: Array.isArray(item.productIds) ? item.productIds.map(String) : [],
       expires: String(item.expires ?? ""),
+      minQty: Math.max(0, parseInt(String(item.minQty ?? 0), 10) || 0),
     };
   } catch {
     return null;
@@ -235,6 +237,7 @@ export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsG
   const excludedCartLineIds: string[] = [];
   let eligibleSubtotal = 0;
   let fixedTotal = 0;
+  let qualifyingHats = 0;
   for (const line of lines) {
     const productGid: string = line.merchandise?.product?.id ?? "";
     const eligible =
@@ -243,11 +246,17 @@ export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsG
       excludedCartLineIds.push(line.id);
       continue;
     }
+    // Hats count toward the minimum; add-ons (side flags etc.) and non-hat products don't
+    if (line.merchandise?.product?.isHat === true && line.isAddon?.value !== "true") {
+      qualifyingHats += line.quantity;
+    }
     const unit = unitAfterTier(line);
     eligibleSubtotal += unit * line.quantity;
     fixedTotal += Math.min(promo.value, unit) * line.quantity;
   }
   if (eligibleSubtotal <= 0) return { operations: [] };
+  // Minimum number of hats not reached -> code is "valid but not applicable"
+  if (promo.minQty > 0 && qualifyingHats < promo.minQty) return { operations: [] };
 
   let value: any;
   if (promo.type === "percentage") {

@@ -118,7 +118,7 @@
               <label>Code</label>
               <input type="text" id="promoCode" placeholder="e.g. SUMMER10" style="text-transform:uppercase" />
             </div>
-            <div class="form-group">
+            <div class="form-group" id="levelGroup">
               <label>Discount Level</label>
               <select id="promoLevel" onchange="onLevelChange()">
                 <option value="product">Selected products (all or specific)</option>
@@ -127,18 +127,32 @@
             </div>
             <div class="form-group">
               <label>Type</label>
-              <select id="promoType">
+              <select id="promoType" onchange="onTypeChange()">
                 <option value="percentage">Percentage %</option>
                 <option value="fixed">Fixed Amount $</option>
+                <option value="none">No discount (track only)</option>
               </select>
             </div>
-            <div class="form-group">
+            <div class="form-group" id="valueGroup">
               <label>Value</label>
               <input type="number" id="promoValue" placeholder="e.g. 10" min="0.01" step="0.01" />
             </div>
             <div class="form-group">
               <label>Expires (optional)</label>
               <input type="date" id="promoExpires" />
+            </div>
+            <div class="form-group">
+              <label>Minimum hats (optional)</label>
+              <input type="number" id="promoMinQty" placeholder="e.g. 24" min="0" step="1" />
+            </div>
+          </div>
+
+          <!-- Track-only codes (e.g. SIXFREE): message shown in the cart when the code is applied -->
+          <div class="form-row" id="messageRow" style="display:none">
+            <div class="form-group flex-1">
+              <label>Customer message <span class="hint">(shown in the cart when applied, e.g. "Your order will include 6 FREE beanies.")</span></label>
+              <input type="text" id="promoMessage" placeholder="e.g. Your qualifying order will include 6 FREE beanies." />
+              <span class="hint">Track-only codes take no money off. They are applied in the cart Promo Code box and saved on the order as "Promo Code". They can't be entered on the Shopify checkout page. Minimum hats counts products tagged "Hat Product" (add-ons like side flags don't count).</span>
             </div>
           </div>
 
@@ -268,7 +282,16 @@
 
     function onLevelChange() {
       const level = document.getElementById('promoLevel').value;
-      document.getElementById('appliesToRow').style.display = level === 'order' ? 'none' : 'flex';
+      const isNone = document.getElementById('promoType').value === 'none';
+      document.getElementById('appliesToRow').style.display = (level === 'order' || isNone) ? 'none' : 'flex';
+    }
+
+    function onTypeChange() {
+      const isNone = document.getElementById('promoType').value === 'none';
+      document.getElementById('valueGroup').style.display = isNone ? 'none' : '';
+      document.getElementById('levelGroup').style.display = isNone ? 'none' : '';
+      document.getElementById('messageRow').style.display = isNone ? 'flex' : 'none';
+      onLevelChange();
     }
 
     function onAppliesToChange() {
@@ -289,10 +312,13 @@
         const levelLabel = c.discountLevel === 'order'
           ? `<span class="lvl-badge order">Order</span>`
           : `<span class="lvl-badge product">Product</span>`;
-        const typeLabel = c.type === 'percentage'
-          ? `<span class="type-badge pct">% off</span>`
-          : `<span class="type-badge fixed">$ off</span>`;
-        const valueLabel = c.type === 'percentage' ? `${c.value}%` : `$${parseFloat(c.value).toFixed(2)}`;
+        const isNone = c.type === 'none';
+        const typeLabel = isNone
+          ? `<span class="type-badge">Track only</span>`
+          : c.type === 'percentage'
+            ? `<span class="type-badge pct">% off</span>`
+            : `<span class="type-badge fixed">$ off</span>`;
+        const valueLabel = isNone ? '—' : c.type === 'percentage' ? `${c.value}%` : `$${parseFloat(c.value).toFixed(2)}`;
         const expiryLabel = c.expires
           ? (isExpired ? `<span class="expired-badge">Expired ${c.expires}</span>` : c.expires)
           : '—';
@@ -305,6 +331,8 @@
         } else if (c.discountLevel === 'order') {
           appliesToLabel = 'Entire order';
         }
+        if (isNone) appliesToLabel = 'Cart box only';
+        if (c.minQty > 0) appliesToLabel += ` · ${c.minQty}+ hats`;
 
         return `
           <tr>
@@ -322,14 +350,18 @@
 
     async function addPromoCode() {
       const code = document.getElementById('promoCode').value.trim().toUpperCase();
-      const discountLevel = document.getElementById('promoLevel').value;
       const type = document.getElementById('promoType').value;
-      const value = parseFloat(document.getElementById('promoValue').value);
+      const isNone = type === 'none';
+      const discountLevel = isNone ? 'order' : document.getElementById('promoLevel').value;
+      const value = isNone ? 0 : parseFloat(document.getElementById('promoValue').value);
       const expires = document.getElementById('promoExpires').value || null;
       const appliesTo = discountLevel === 'order' ? 'all' : document.getElementById('promoAppliesTo').value;
+      const minQty = parseInt(document.getElementById('promoMinQty').value, 10) || 0;
+      const message = document.getElementById('promoMessage').value.trim();
 
       if (!code) { showToast('Enter a promo code', 'error'); return; }
-      if (isNaN(value) || value <= 0) { showToast('Enter a valid discount value', 'error'); return; }
+      if (!isNone && (isNaN(value) || value <= 0)) { showToast('Enter a valid discount value', 'error'); return; }
+      if (minQty < 0) { showToast('Minimum hats must be 0 or more', 'error'); return; }
       if (promoCodes.find(c => c.code === code)) { showToast('Code already exists', 'error'); return; }
 
       // Parse product/collection IDs — convert numeric IDs to GIDs
@@ -357,6 +389,8 @@
         ...(productIds.length ? { productIds } : {}),
         ...(collectionIds.length ? { collectionIds } : {}),
         ...(expires ? { expires } : {}),
+        ...(minQty > 0 ? { minQty } : {}),
+        ...(isNone && message ? { message } : {}),
       };
       const updated = [...promoCodes, newCode];
 
@@ -379,6 +413,8 @@
         document.getElementById('promoExpires').value = '';
         document.getElementById('promoProductIds').value = '';
         document.getElementById('promoCollectionIds').value = '';
+        document.getElementById('promoMinQty').value = '';
+        document.getElementById('promoMessage').value = '';
         document.getElementById('promoAppliesTo').value = 'all';
         onAppliesToChange();
         showToast(`${code} added`, 'success');

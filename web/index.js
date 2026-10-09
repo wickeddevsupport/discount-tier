@@ -416,6 +416,11 @@ async function syncOnePromo(shop, token, promo) {
   const code = String(promo.code).toUpperCase().trim();
   const isOrder = promo.discountLevel === "order";
 
+  // "Track only" codes (e.g. SIXFREE): no money off, so they are NOT Shopify discount
+  // codes (checkout drops a code that gives $0). The cart page applies them as the
+  // "Promo Code" cart attribute, which is saved on the order. Remove any old discount.
+  if (promo.type === "none") return await deletePromoDiscount(shop, token, code);
+
   // Settings the function reads. Collections are resolved to product IDs here.
   let productIds = Array.isArray(promo.productIds) ? promo.productIds : [];
   if (!isOrder && promo.appliesTo === "collections") {
@@ -429,6 +434,7 @@ async function syncOnePromo(shop, token, promo) {
     appliesTo: isOrder ? "all" : (promo.appliesTo ?? "all"),
     productIds,
     expires: promo.expires ?? "",
+    minQty: Math.max(0, parseInt(promo.minQty ?? 0, 10) || 0),
   };
 
   const discountInput = {
@@ -520,6 +526,25 @@ async function syncPromoCodes(shop, token, codes, previousCodes = []) {
   return errors;
 }
 
+// Track-only codes for the cart page (theme reads shop.metafields.custom.tracking_codes).
+// Only track-only codes are published here; real discount codes stay private.
+async function writeTrackingCodes(shop, token, shopId, codes) {
+  const today = new Date().toISOString().slice(0, 10);
+  const tracking = codes
+    .filter(c => c.type === "none" && !(c.expires && c.expires < today))
+    .map(c => ({
+      code: String(c.code).toUpperCase().trim(),
+      minQty: Math.max(0, parseInt(c.minQty ?? 0, 10) || 0),
+      message: String(c.message ?? ""),
+      expires: c.expires ?? "",
+    }));
+  const data = await gql(shop, token, `
+    mutation($m: [MetafieldsSetInput!]!) { metafieldsSet(metafields: $m) { userErrors { field message } } }
+  `, { m: [{ ownerId: shopId, namespace: "custom", key: "tracking_codes", type: "json", value: JSON.stringify(tracking) }] });
+  const errs = data?.data?.metafieldsSet?.userErrors ?? data?.errors ?? [];
+  return errs.length ? `Tracking codes: ${errs[0].message}` : null;
+}
+
 async function readPromoMetafield(shop, token) {
   const data = await gql(shop, token, `{ shop { id metafield(namespace: "custom", key: "promo_codes") { value } } }`);
   let codes = [];
@@ -567,6 +592,9 @@ app.post("/api/promo-codes", async (req, res) => {
 
   const errors = data?.data?.metafieldsSet?.userErrors ?? [];
   if (errors.length) return res.json({ ok: false, error: errors[0].message });
+
+  const trackErr = await writeTrackingCodes(shop, token, shopId, codes);
+  if (trackErr) return res.json({ ok: false, error: trackErr });
   res.json({ ok: true });
 });
 
@@ -576,8 +604,10 @@ app.get("/api/promo-codes/sync", async (req, res) => {
   const { shop } = req.query;
   const token = tokenStore[shop];
   if (!token) return res.status(401).json({ error: "Not authenticated. Please reinstall the app." });
-  const { codes } = await readPromoMetafield(shop, token);
+  const { shopId, codes } = await readPromoMetafield(shop, token);
   const errors = await syncPromoCodes(shop, token, codes, []);
+  const trackErr = shopId ? await writeTrackingCodes(shop, token, shopId, codes) : "Could not get shop ID";
+  if (trackErr) errors.push(trackErr);
   res.json({ ok: errors.length === 0, synced: codes.map(c => c.code), errors });
 });
 

@@ -20,6 +20,7 @@ query CartInput {
           title
           product {
             id
+            isHat: hasAnyTag(tags: ["Hat Product"])
             patchType: metafield(namespace: "custom", key: "patch_type") {
               value
             }
