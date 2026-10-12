@@ -428,13 +428,16 @@ async function syncOnePromo(shop, token, promo) {
   }
   const config = {
     code,
-    discountLevel: isOrder ? "order" : "product",
+    discountLevel: (isOrder || promo.type === "gift") ? "order" : "product",
     type: promo.type,
     value: promo.value,
     appliesTo: isOrder ? "all" : (promo.appliesTo ?? "all"),
     productIds,
     expires: promo.expires ?? "",
     minQty: Math.max(0, parseInt(promo.minQty ?? 0, 10) || 0),
+    // type "gift" (e.g. SIXFREE): these products can be free, up to giftQty items
+    giftProductIds: Array.isArray(promo.giftProductIds) ? promo.giftProductIds : [],
+    giftQty: Math.max(0, parseInt(promo.giftQty ?? 0, 10) || 0),
   };
 
   const discountInput = {

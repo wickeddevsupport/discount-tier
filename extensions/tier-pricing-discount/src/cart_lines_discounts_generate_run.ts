@@ -31,6 +31,8 @@ type Promo = {
   productIds: string[]; // for "collections" the app resolves collection -> product IDs
   expires: string;
   minQty: number; // minimum number of hats ("Hat Product" tag, add-ons excluded); 0 = no minimum
+  giftProductIds: string[]; // type "gift": products that can be free (e.g. beanies)
+  giftQty: number; // type "gift": how many gift items are free (e.g. 6)
 };
 
 const ADDON_TIERS: Tier[] = [
@@ -83,9 +85,13 @@ function parsePromo(raw: string | null | undefined): Promo | null {
   if (!raw) return null;
   try {
     const item = JSON.parse(raw);
-    if (!item || !item.code || !item.type || item.value == null) return null;
-    const value = parseFloat(item.value);
-    if (isNaN(value) || value <= 0) return null;
+    if (!item || !item.code || !item.type) return null;
+    const isGift = String(item.type) === "gift";
+    const value = isGift ? 0 : parseFloat(item.value);
+    if (!isGift && (isNaN(value) || value <= 0)) return null;
+    const giftProductIds = Array.isArray(item.giftProductIds) ? item.giftProductIds.map(String) : [];
+    const giftQty = Math.max(0, parseInt(String(item.giftQty ?? 0), 10) || 0);
+    if (isGift && (!giftProductIds.length || giftQty <= 0)) return null;
     const today = new Date().toISOString().slice(0, 10);
     if (item.expires && String(item.expires) < today) return null;
     return {
@@ -97,6 +103,8 @@ function parsePromo(raw: string | null | undefined): Promo | null {
       productIds: Array.isArray(item.productIds) ? item.productIds.map(String) : [],
       expires: String(item.expires ?? ""),
       minQty: Math.max(0, parseInt(String(item.minQty ?? 0), 10) || 0),
+      giftProductIds,
+      giftQty,
     };
   } catch {
     return null;
@@ -232,6 +240,55 @@ export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsG
     const tierPrice = tierPriceByLine[line.id];
     const basePrice = parseFloat(line.cost.amountPerQuantity.amount);
     return tierPrice === undefined ? basePrice : Math.min(basePrice, tierPrice);
+  }
+
+  // ── Free gift (e.g. SIXFREE: 24+ hats -> up to 6 beanies free) ──────────
+  // The gift items must be in the cart. The cheapest gift units (after tier
+  // pricing) are made free via an order discount limited to the gift lines.
+  // Free units do not count toward the hat minimum.
+  if (promo.type === "gift") {
+    const units: { price: number; isHat: boolean }[] = [];
+    const giftLineIds: Record<string, boolean> = {};
+    let totalHats = 0;
+    for (const line of lines) {
+      const productGid: string = line.merchandise?.product?.id ?? "";
+      const isHat = line.merchandise?.product?.isHat === true && line.isAddon?.value !== "true";
+      if (isHat) totalHats += line.quantity;
+      if (productGid !== "" && promo.giftProductIds.indexOf(productGid) !== -1) {
+        giftLineIds[line.id] = true;
+        const unit = unitAfterTier(line);
+        for (let i = 0; i < line.quantity && units.length < 1000; i++) units.push({ price: unit, isHat });
+      }
+    }
+    units.sort((a, b) => a.price - b.price);
+    let freeValue = 0;
+    let freeHatUnits = 0;
+    const freeCount = Math.min(promo.giftQty, units.length);
+    for (let i = 0; i < freeCount; i++) {
+      freeValue += units[i].price;
+      if (units[i].isHat) freeHatUnits += 1;
+    }
+    if (promo.minQty > 0 && totalHats - freeHatUnits < promo.minQty) return { operations: [] };
+    freeValue = round2(freeValue);
+    if (freeValue <= 0) return { operations: [] };
+    const giftExcluded: string[] = [];
+    for (const line of lines) if (!giftLineIds[line.id]) giftExcluded.push(line.id);
+    return {
+      operations: [
+        {
+          orderDiscountsAdd: {
+            candidates: [
+              {
+                message: promo.code,
+                targets: [{ orderSubtotal: { excludedCartLineIds: giftExcluded } }],
+                value: { fixedAmount: { amount: freeValue.toFixed(2) } },
+              },
+            ],
+            selectionStrategy: OrderDiscountSelectionStrategy.First,
+          },
+        },
+      ],
+    } as any;
   }
 
   const excludedCartLineIds: string[] = [];
