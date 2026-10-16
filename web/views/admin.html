@@ -230,9 +230,9 @@
         <div class="form-row" id="minQtyRow">
           <div class="form-group">
             <label>Minimum Quantity (optional)</label>
-            <input type="number" id="promoMinQty" placeholder="e.g. 24" min="0" step="1" style="max-width:110px" />
+            <input type="number" id="promoMinQty" placeholder="e.g. 24" min="0" step="1" style="max-width:110px" oninput="onMinQtyChange()" />
           </div>
-          <div class="form-group flex-1" id="minQtyProductGroup">
+          <div class="form-group flex-1" id="minQtyProductGroup" style="display:none">
             <label>Count Only These Products Toward Minimum <span class="hint" style="display:inline">(leave empty to count all hat-tagged products)</span></label>
             <div class="picker-wrap">
               <input class="picker-input" id="minQtyProductSearch" placeholder="Search products..." autocomplete="off" oninput="onPickerInput('minQtyProduct')" onfocus="onPickerFocus('minQtyProduct')" onblur="onPickerBlur('minQtyProduct')" />
@@ -335,7 +335,7 @@ function onPickerFocus(name) {
   fetchPickerResults(name, pickers[name].searchEl.value.trim());
 }
 function onPickerBlur(name) {
-  setTimeout(() => { pickers[name].dropdownEl.style.display = 'none'; }, 180);
+  setTimeout(() => { pickers[name].dropdownEl.style.display = 'none'; }, 250);
 }
 
 async function fetchPickerResults(name, query) {
@@ -517,6 +517,7 @@ function editPromoCode(index) {
   }
   if (c.minQtyProductIds?.length) {
     setPickerItems('minQtyProduct', c.minQtyProductIds.map(gid => ({ gid, title: gid.split('/').pop(), image: '' })));
+    document.getElementById('minQtyProductGroup').style.display = '';
   }
 
   onFormChange();
@@ -638,6 +639,15 @@ function showToast(msg, type) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.className = 'toast ' + type + ' show';
   setTimeout(() => t.className = 'toast ' + type, 3000);
+}
+
+function onMinQtyChange() {
+  const val = parseInt(document.getElementById('promoMinQty').value, 10) || 0;
+  document.getElementById('minQtyProductGroup').style.display = val > 0 ? '' : 'none';
+  if (val <= 0) {
+    pickers.minQtyProduct.selected = [];
+    renderPickerChips('minQtyProduct');
+  }
 }
 
 // Init form state
