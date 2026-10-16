@@ -354,7 +354,9 @@ async function fetchPickerResults(name, query) {
     const gid = isCollection ? item.gid : ('gid://shopify/Product/' + item.id);
     const sub = isCollection ? (item.productsCount + ' products') : (item.variantCount + ' variants');
     const alreadySelected = p.selected.some(s => s.gid === gid);
-    return `<div class="picker-item${alreadySelected?' selected':''}" onclick="selectPickerItem('${name}','${gid}',${JSON.stringify(item.title).replace(/'/g,"\\'")},'${item.image||''}')">
+    const titleEscaped = item.title.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    const imgEscaped = (item.image||'').replace(/'/g,"\\'");
+    return `<div class="picker-item${alreadySelected?' selected':''}" onmousedown="event.preventDefault();selectPickerItem('${name}','${gid}','${titleEscaped}','${imgEscaped}')">
       ${item.image ? `<img src="${item.image}" alt="">` : '<div class="no-img-sm">📦</div>'}
       <div><div class="item-title">${item.title}</div><div class="item-sub">${sub}</div></div>
     </div>`;
