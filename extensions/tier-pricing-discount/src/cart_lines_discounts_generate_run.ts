@@ -118,8 +118,10 @@ function parsePromo(raw: string | null | undefined): Promo | null {
 
 function promoAppliesToProduct(promo: Promo, productGid: string): boolean {
   if (promo.appliesTo === "all") return true;
-  // "products" and "collections" both use the resolved productIds list
-  return promo.productIds.indexOf(productGid) !== -1;
+  // Normalize both sides: strip to numeric ID for comparison
+  const normalize = (id: string) => String(id).split("/").pop() ?? id;
+  const normalized = normalize(productGid);
+  return promo.productIds.some(id => normalize(id) === normalized);
 }
 
 function round2(n: number): number {
@@ -248,6 +250,7 @@ export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsG
   }
 
   // ── Track-only ($0.01): just apply the tiny fixed discount ────────────────
+  const normalize = (id: string) => String(id).split("/").pop() ?? id;
   if (promo.type === "trackonly") {
     return {
       operations: [
@@ -276,10 +279,10 @@ export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsG
       const productGid: string = line.merchandise?.product?.id ?? "";
       // qualifying products: if minQtyProductIds is set use those, else fall back to isHat tag
       const isQualifying = promo.minQtyProductIds.length > 0
-        ? promo.minQtyProductIds.indexOf(productGid) !== -1 && line.isAddon?.value !== "true"
+        ? promo.minQtyProductIds.some(id => normalize(id) === normalize(productGid)) && line.isAddon?.value !== "true"
         : line.merchandise?.product?.isHat === true && line.isAddon?.value !== "true";
       if (isQualifying) totalQualifying += line.quantity;
-      if (productGid !== "" && promo.giftProductIds.indexOf(productGid) !== -1) {
+      if (productGid !== "" && promo.giftProductIds.some(id => normalize(id) === normalize(productGid))) {
         giftLineIds[line.id] = true;
         const unit = unitAfterTier(line);
         for (let i = 0; i < line.quantity && units.length < 1000; i++) units.push({ price: unit, isQualifying });
@@ -331,7 +334,7 @@ export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsG
     // Count toward minimum: if minQtyProductIds set, only those products count;
     // otherwise fall back to "Hat Product" tag (add-ons excluded)
     const countsTowardMin = promo.minQtyProductIds.length > 0
-      ? promo.minQtyProductIds.indexOf(productGid) !== -1 && line.isAddon?.value !== "true"
+      ? promo.minQtyProductIds.some(id => normalize(id) === normalize(productGid)) && line.isAddon?.value !== "true"
       : line.merchandise?.product?.isHat === true && line.isAddon?.value !== "true";
     if (countsTowardMin) qualifyingQty += line.quantity;
     const unit = unitAfterTier(line);
