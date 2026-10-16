@@ -9,25 +9,23 @@
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f6f6f7; color: #202223; }
     .topbar { background: #1a1a2e; color: white; padding: 16px 24px; display: flex; align-items: center; gap: 12px; }
     .topbar h1 { font-size: 18px; font-weight: 600; }
-    .tabs { display: flex; gap: 0; border-bottom: 2px solid #e1e3e5; background: white; padding: 0 24px; }
-    .tab-btn { padding: 14px 20px; font-size: 14px; font-weight: 500; color: #6d7175; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color 0.15s; }
+    .tabs { display: flex; border-bottom: 2px solid #e1e3e5; background: white; padding: 0 24px; }
+    .tab-btn { padding: 14px 20px; font-size: 14px; font-weight: 500; color: #6d7175; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; }
     .tab-btn.active { color: #458fff; border-bottom-color: #458fff; }
     .tab-btn:hover:not(.active) { color: #202223; }
     .tab-panel { display: none; }
     .tab-panel.active { display: block; }
-    .container { max-width: 900px; margin: 32px auto; padding: 0 16px; }
+    .container { max-width: 960px; margin: 32px auto; padding: 0 16px; }
 
-    /* ── Products tab ── */
+    /* Products tab */
     .search-bar { display: flex; gap: 10px; margin-bottom: 24px; }
     .search-bar input { flex: 1; padding: 10px 14px; border: 1px solid #c9cccf; border-radius: 8px; font-size: 14px; outline: none; }
     .search-bar input:focus { border-color: #458fff; box-shadow: 0 0 0 2px #e0ecff; }
     .search-bar button { padding: 10px 20px; background: #458fff; color: white; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; }
-    .search-bar button:hover { background: #2d6fe0; }
     .product-list { display: flex; flex-direction: column; gap: 10px; }
-    .product-card { background: white; border: 1px solid #e1e3e5; border-radius: 10px; padding: 16px 20px; display: flex; align-items: center; gap: 16px; cursor: pointer; transition: box-shadow 0.15s; text-decoration: none; color: inherit; }
+    .product-card { background: white; border: 1px solid #e1e3e5; border-radius: 10px; padding: 16px 20px; display: flex; align-items: center; gap: 16px; cursor: pointer; text-decoration: none; color: inherit; transition: box-shadow 0.15s; }
     .product-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,0.1); border-color: #458fff; }
-    .product-card img { width: 56px; height: 56px; object-fit: cover; border-radius: 6px; background: #f0f0f0; }
-    .product-card .no-img { width: 56px; height: 56px; border-radius: 6px; background: #e8e8e8; display: flex; align-items: center; justify-content: center; font-size: 22px; }
+    .product-card img, .product-card .no-img { width: 56px; height: 56px; border-radius: 6px; object-fit: cover; background: #e8e8e8; display: flex; align-items: center; justify-content: center; font-size: 22px; }
     .product-info { flex: 1; }
     .product-info .name { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
     .product-info .meta { font-size: 13px; color: #6d7175; }
@@ -40,443 +38,611 @@
     .pagination { display: flex; justify-content: center; gap: 10px; margin-top: 24px; }
     .pagination button { padding: 8px 18px; border: 1px solid #c9cccf; border-radius: 6px; background: white; cursor: pointer; font-size: 14px; }
     .pagination button:disabled { opacity: 0.4; cursor: default; }
-    .pagination button:not(:disabled):hover { background: #f0f0f0; }
 
-    /* ── Promo Codes tab ── */
+    /* Promo tab */
     .promo-section { background: white; border: 1px solid #e1e3e5; border-radius: 10px; padding: 24px; margin-bottom: 24px; }
     .promo-section h2 { font-size: 16px; font-weight: 600; margin-bottom: 20px; }
-    .promo-form-grid { display: flex; flex-direction: column; gap: 14px; }
+    .form-grid { display: flex; flex-direction: column; gap: 16px; }
     .form-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
     .form-group { display: flex; flex-direction: column; gap: 5px; }
-    .form-group.flex-1 { flex: 1; min-width: 200px; }
-    .form-group label { font-size: 12px; font-weight: 600; color: #6d7175; text-transform: uppercase; }
-    .form-group .hint { font-size: 11px; color: #9da1a4; text-transform: none; font-weight: 400; }
-    .form-group input, .form-group select { padding: 9px 12px; border: 1px solid #c9cccf; border-radius: 7px; font-size: 14px; outline: none; min-width: 130px; }
+    .form-group.flex-1 { flex: 1; min-width: 180px; }
+    .form-group label { font-size: 12px; font-weight: 600; color: #6d7175; text-transform: uppercase; letter-spacing: 0.4px; }
+    .hint { font-size: 11px; color: #9da1a4; font-weight: 400; text-transform: none; margin-top: 3px; display: block; }
+    .form-group input, .form-group select { padding: 9px 12px; border: 1px solid #c9cccf; border-radius: 7px; font-size: 14px; outline: none; min-width: 120px; }
     .form-group input:focus, .form-group select:focus { border-color: #458fff; box-shadow: 0 0 0 2px #e0ecff; }
-    .btn-add { padding: 9px 24px; background: #458fff; color: white; border: none; border-radius: 7px; font-size: 14px; font-weight: 600; cursor: pointer; }
-    .btn-add:hover { background: #2d6fe0; }
-    .btn-add:disabled { opacity: 0.5; cursor: default; }
+    .btn-primary { padding: 9px 24px; background: #458fff; color: white; border: none; border-radius: 7px; font-size: 14px; font-weight: 600; cursor: pointer; }
+    .btn-primary:hover { background: #2d6fe0; }
+    .btn-primary:disabled { opacity: 0.5; cursor: default; }
+    .btn-secondary { padding: 9px 18px; background: white; color: #202223; border: 1px solid #c9cccf; border-radius: 7px; font-size: 14px; cursor: pointer; }
+    .btn-secondary:hover { background: #f6f6f7; }
+
+    /* Product/collection picker */
+    .picker-wrap { position: relative; }
+    .picker-input { width: 100%; padding: 9px 12px; border: 1px solid #c9cccf; border-radius: 7px; font-size: 14px; outline: none; }
+    .picker-input:focus { border-color: #458fff; box-shadow: 0 0 0 2px #e0ecff; }
+    .picker-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #c9cccf; border-radius: 7px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); z-index: 100; max-height: 260px; overflow-y: auto; margin-top: 2px; }
+    .picker-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer; font-size: 14px; }
+    .picker-item:hover { background: #f0f6ff; }
+    .picker-item img { width: 36px; height: 36px; border-radius: 4px; object-fit: cover; background: #e8e8e8; flex-shrink: 0; }
+    .picker-item .no-img-sm { width: 36px; height: 36px; border-radius: 4px; background: #e8e8e8; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+    .picker-item .item-title { font-weight: 500; }
+    .picker-item .item-sub { font-size: 12px; color: #6d7175; }
+    .picker-loading { padding: 12px; text-align: center; color: #6d7175; font-size: 13px; }
+    .selected-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .chip { display: inline-flex; align-items: center; gap: 6px; background: #f0f6ff; border: 1px solid #c4d9ff; border-radius: 20px; padding: 4px 10px; font-size: 13px; color: #1a4faf; }
+    .chip img { width: 20px; height: 20px; border-radius: 3px; object-fit: cover; }
+    .chip-remove { background: none; border: none; color: #6d7175; cursor: pointer; font-size: 16px; line-height: 1; padding: 0; margin-left: 2px; }
+    .chip-remove:hover { color: #d72c0d; }
+
+    /* Promo table */
     .promo-table { width: 100%; border-collapse: collapse; }
-    .promo-table th { text-align: left; font-size: 12px; font-weight: 600; color: #6d7175; text-transform: uppercase; padding: 8px 12px; border-bottom: 2px solid #e1e3e5; }
-    .promo-table td { padding: 10px 12px; border-bottom: 1px solid #f1f1f1; font-size: 13px; vertical-align: middle; }
+    .promo-table th { text-align: left; font-size: 11px; font-weight: 600; color: #6d7175; text-transform: uppercase; padding: 8px 10px; border-bottom: 2px solid #e1e3e5; }
+    .promo-table td { padding: 10px; border-bottom: 1px solid #f1f1f1; font-size: 13px; vertical-align: middle; }
     .promo-table tr:last-child td { border-bottom: none; }
     .promo-table tr:hover td { background: #f9f9f9; }
-    .code-badge { font-family: monospace; font-size: 13px; background: #f0f6ff; color: #1a4faf; padding: 3px 8px; border-radius: 5px; font-weight: 600; letter-spacing: 0.5px; }
-    .lvl-badge { font-size: 11px; padding: 3px 8px; border-radius: 20px; font-weight: 500; }
-    .lvl-badge.product { background: #e3f5e1; color: #1a6630; }
-    .lvl-badge.order { background: #e8f0fe; color: #1a4faf; }
-    .type-badge { font-size: 11px; padding: 3px 8px; border-radius: 20px; font-weight: 500; }
-    .type-badge.pct { background: #fff0e0; color: #a35200; }
-    .type-badge.fixed { background: #f0f0f0; color: #6d7175; }
-    .expired-badge { font-size: 11px; padding: 3px 8px; border-radius: 20px; background: #fde8e8; color: #d72c0d; font-weight: 500; }
-    .btn-delete { background: none; border: 1px solid #e1e3e5; color: #d72c0d; padding: 5px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+    .code-badge { font-family: monospace; font-size: 13px; background: #f0f6ff; color: #1a4faf; padding: 3px 8px; border-radius: 5px; font-weight: 600; }
+    .pill { font-size: 11px; padding: 3px 8px; border-radius: 20px; font-weight: 500; white-space: nowrap; }
+    .pill.order { background: #e8f0fe; color: #1a4faf; }
+    .pill.product { background: #e3f5e1; color: #1a6630; }
+    .pill.pct { background: #fff0e0; color: #a35200; }
+    .pill.fixed { background: #f0f0f0; color: #6d7175; }
+    .pill.gift { background: #f3e8ff; color: #6b21a8; }
+    .pill.track { background: #fef9e7; color: #92610a; }
+    .expired-pill { font-size: 11px; padding: 3px 8px; border-radius: 20px; background: #fde8e8; color: #d72c0d; font-weight: 500; }
+    .btn-edit { background: none; border: 1px solid #c9cccf; color: #202223; padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; margin-right: 4px; }
+    .btn-edit:hover { background: #f0f6ff; border-color: #458fff; color: #458fff; }
+    .btn-delete { background: none; border: 1px solid #e1e3e5; color: #d72c0d; padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; }
     .btn-delete:hover { background: #fff4f4; border-color: #d72c0d; }
     .promo-empty { text-align: center; padding: 32px; color: #6d7175; font-size: 14px; }
+
     .toast { position: fixed; bottom: 24px; right: 24px; padding: 14px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; color: white; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 999; }
     .toast.success { background: #1a6630; }
     .toast.error { background: #d72c0d; }
     .toast.show { opacity: 1; }
+    .section-divider { border: none; border-top: 1px solid #e1e3e5; margin: 20px 0; }
+    .edit-banner { background: #fffbe6; border: 1px solid #f0c040; border-radius: 8px; padding: 10px 16px; margin-bottom: 16px; font-size: 13px; color: #7a5c00; display: flex; align-items: center; justify-content: space-between; }
   </style>
 </head>
 <body>
-  <div class="topbar">
-    <h1>🏷️ Tier Pricing Manager</h1>
-  </div>
+<div class="topbar"><h1>🏷️ Tier Pricing Manager</h1></div>
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('products')">Products</button>
+  <button class="tab-btn" onclick="switchTab('promo')">Promo Codes</button>
+</div>
 
-  <div class="tabs">
-    <button class="tab-btn active" onclick="switchTab('products')">Products</button>
-    <button class="tab-btn" onclick="switchTab('promo')">Promo Codes</button>
-  </div>
-
-  <!-- Products Tab -->
-  <div class="tab-panel active" id="tab-products">
-    <div class="container">
-      <div class="search-bar">
-        <input type="text" id="searchInput" placeholder="Search products..." />
-        <button onclick="searchProducts()">Search</button>
-      </div>
-      <div class="product-list" id="productList">
-        <div class="loading">Loading products...</div>
-      </div>
-      <div class="pagination">
-        <button id="prevBtn" onclick="changePage(-1)" disabled>← Prev</button>
-        <button id="nextBtn" onclick="changePage(1)" disabled>Next →</button>
-      </div>
+<!-- Products Tab -->
+<div class="tab-panel active" id="tab-products">
+  <div class="container">
+    <div class="search-bar">
+      <input type="text" id="searchInput" placeholder="Search products..." />
+      <button onclick="searchProducts()">Search</button>
+    </div>
+    <div class="product-list" id="productList"><div class="loading">Loading products...</div></div>
+    <div class="pagination">
+      <button id="prevBtn" onclick="changePage(-1)" disabled>← Prev</button>
+      <button id="nextBtn" onclick="changePage(1)" disabled>Next →</button>
     </div>
   </div>
+</div>
 
-  <!-- Promo Codes Tab -->
-  <div class="tab-panel" id="tab-promo">
-    <div class="container">
-      <div class="promo-section">
-        <h2>Add Promo Code</h2>
+<!-- Promo Codes Tab -->
+<div class="tab-panel" id="tab-promo">
+  <div class="container">
+    <div class="promo-section">
+      <div id="editBanner" class="edit-banner" style="display:none">
+        ✏️ Editing <strong id="editBannerCode"></strong>
+        <button class="btn-secondary" onclick="cancelEdit()">Cancel Edit</button>
+      </div>
+      <h2 id="formTitle">Add Promo Code</h2>
 
-        <div class="promo-form-grid">
-          <!-- Row 1 -->
-          <div class="form-row">
-            <div class="form-group">
-              <label>Code</label>
-              <input type="text" id="promoCode" placeholder="e.g. SUMMER10" style="text-transform:uppercase" />
-            </div>
-            <div class="form-group" id="levelGroup">
-              <label>Discount Level</label>
-              <select id="promoLevel" onchange="onLevelChange()">
-                <option value="product">Selected products (all or specific)</option>
-                <option value="order">Entire order</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Type</label>
-              <select id="promoType" onchange="onTypeChange()">
-                <option value="percentage">Percentage %</option>
-                <option value="fixed">Fixed Amount $</option>
-                <option value="gift">Free gift (e.g. 6 free beanies)</option>
-                <option value="none">No discount (track only)</option>
-              </select>
-            </div>
-            <div class="form-group" id="valueGroup">
-              <label>Value</label>
-              <input type="number" id="promoValue" placeholder="e.g. 10" min="0.01" step="0.01" />
-            </div>
-            <div class="form-group">
-              <label>Expires (optional)</label>
-              <input type="date" id="promoExpires" />
-            </div>
-            <div class="form-group">
-              <label>Minimum hats (optional)</label>
-              <input type="number" id="promoMinQty" placeholder="e.g. 24" min="0" step="1" />
-            </div>
+      <div class="form-grid">
+        <!-- Row 1: code, level, type, value, expires -->
+        <div class="form-row">
+          <div class="form-group">
+            <label>Code</label>
+            <input type="text" id="promoCode" placeholder="e.g. SUMMER10" style="text-transform:uppercase;min-width:140px" />
           </div>
-
-          <!-- Free gift codes (e.g. SIXFREE): gift products + how many are free -->
-          <div class="form-row" id="giftRow" style="display:none">
-            <div class="form-group flex-1">
-              <label>Gift product IDs <span class="hint">(comma separated Shopify product IDs that can be free, e.g. the beanies)</span></label>
-              <input type="text" id="promoGiftProductIds" placeholder="e.g. 7846922879054,7847001358414" />
-            </div>
-            <div class="form-group">
-              <label>Number of free items</label>
-              <input type="number" id="promoGiftQty" placeholder="e.g. 6" min="1" step="1" />
-            </div>
+          <div class="form-group" id="levelGroup">
+            <label>Discount Level</label>
+            <select id="promoLevel" onchange="onFormChange()">
+              <option value="product">Product level</option>
+              <option value="order">Order level</option>
+            </select>
           </div>
-          <div class="form-row" id="giftHintRow" style="display:none">
-            <span class="hint">The customer adds the gift items to the cart; with this code the cheapest ones (up to the number above) become free. A real discount at checkout, combined with Tier Pricing. Free items don't count toward Minimum hats.</span>
+          <div class="form-group">
+            <label>Type</label>
+            <select id="promoType" onchange="onFormChange()">
+              <option value="percentage">Percentage %</option>
+              <option value="fixed">Fixed Amount $</option>
+              <option value="gift">Free Gift</option>
+              <option value="none">Track Only</option>
+            </select>
           </div>
-
-          <!-- Track-only codes (e.g. SIXFREE): message shown in the cart when the code is applied -->
-          <div class="form-row" id="messageRow" style="display:none">
-            <div class="form-group flex-1">
-              <label>Customer message <span class="hint">(shown in the cart when applied, e.g. "Your order will include 6 FREE beanies.")</span></label>
-              <input type="text" id="promoMessage" placeholder="e.g. Your qualifying order will include 6 FREE beanies." />
-              <span class="hint">Track-only codes take no money off. They are applied in the cart Promo Code box and saved on the order as "Promo Code". They can't be entered on the Shopify checkout page. Minimum hats counts products tagged "Hat Product" (add-ons like side flags don't count).</span>
-            </div>
+          <div class="form-group" id="valueGroup">
+            <label>Value</label>
+            <input type="number" id="promoValue" placeholder="e.g. 10" min="0.01" step="0.01" style="max-width:110px" />
           </div>
-
-          <!-- Applies To (product level only). Either way the code is applied in Shopify as an order discount
-               (so it stacks with Tier Pricing); for "Selected products" only matching lines are discounted. -->
-          <div class="form-row" id="appliesToRow">
-            <div class="form-group" style="min-width:180px">
-              <label>Applies To</label>
-              <select id="promoAppliesTo" onchange="onAppliesToChange()">
-                <option value="all">All Products</option>
-                <option value="products">Specific Products</option>
-                <option value="collections">Specific Collections</option>
-              </select>
-            </div>
-            <div class="form-group flex-1" id="productIdsGroup" style="display:none">
-              <label>Product IDs <span class="hint">(comma separated Shopify product IDs, e.g. 123456,789012)</span></label>
-              <input type="text" id="promoProductIds" placeholder="e.g. 8765432100,8765432101" />
-            </div>
-            <div class="form-group flex-1" id="collectionIdsGroup" style="display:none">
-              <label>Collection IDs <span class="hint">(comma separated Shopify collection IDs)</span></label>
-              <input type="text" id="promoCollectionIds" placeholder="e.g. 445566778,998877665" />
-            </div>
+          <div class="form-group">
+            <label>Expires (optional)</label>
+            <input type="date" id="promoExpires" />
           </div>
         </div>
 
-        <div style="margin-top:16px">
-          <button class="btn-add" onclick="addPromoCode()">Add Code</button>
+        <!-- Track-only message -->
+        <div class="form-row" id="messageRow" style="display:none">
+          <div class="form-group flex-1">
+            <label>Customer Message</label>
+            <input type="text" id="promoMessage" placeholder="e.g. Your order includes 6 FREE beanies." />
+            <span class="hint">Shown in cart when code is applied. Track-only codes apply $0.01 at checkout so they work on the Shopify checkout page and stack with Tier Pricing.</span>
+          </div>
         </div>
 
-        <hr style="margin:24px 0;border:none;border-top:1px solid #e1e3e5">
-
-        <table class="promo-table">
-          <thead>
-            <tr>
-              <th>Code</th>
-              <th>Level</th>
-              <th>Type</th>
-              <th>Value</th>
-              <th>Applies To</th>
-              <th>Expires</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="promoTableBody">
-            <tr><td colspan="7" class="promo-empty">Loading...</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <div class="toast" id="toast"></div>
-
-  <script>
-    const shop = new URLSearchParams(location.search).get('shop') || '';
-    let cursor = null;
-    let prevCursors = [];
-    let currentQuery = '';
-    let promoCodes = [];
-
-    // ── Tab switching ──────────────────────────────────────────────────────
-    function switchTab(name) {
-      document.querySelectorAll('.tab-btn').forEach((b, i) => {
-        b.classList.toggle('active', ['products','promo'][i] === name);
-      });
-      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-      document.getElementById(`tab-${name}`).classList.add('active');
-      if (name === 'promo') loadPromoCodes();
-    }
-
-    // ── Products ───────────────────────────────────────────────────────────
-    async function loadProducts(after = null, query = '') {
-      document.getElementById('productList').innerHTML = '<div class="loading">Loading...</div>';
-      const params = new URLSearchParams({ shop });
-      if (after) params.set('after', after);
-      if (query) params.set('query', query);
-      const res = await fetch(`/api/products?${params}`);
-      const data = await res.json();
-      if (data.error) {
-        document.getElementById('productList').innerHTML = `<div class="empty">Error: ${data.error}</div>`;
-        return;
-      }
-      renderProducts(data.products);
-      document.getElementById('nextBtn').disabled = !data.hasNextPage;
-      cursor = data.endCursor;
-    }
-
-    function renderProducts(products) {
-      const list = document.getElementById('productList');
-      if (!products.length) { list.innerHTML = '<div class="empty">No products found.</div>'; return; }
-      list.innerHTML = products.map(p => `
-        <a class="product-card" href="/admin/product/${p.id}?shop=${shop}">
-          ${p.image ? `<img src="${p.image}" alt="${p.title}">` : '<div class="no-img">🧢</div>'}
-          <div class="product-info">
-            <div class="name">${p.title}</div>
-            <div class="meta">${p.variantCount} variant${p.variantCount !== 1 ? 's' : ''}</div>
+        <!-- Gift settings -->
+        <div id="giftRow" style="display:none">
+          <div class="form-row" style="margin-bottom:12px">
+            <div class="form-group flex-1">
+              <label>Gift Products <span class="hint" style="display:inline">(items that become free — customer must add them to cart)</span></label>
+              <div class="picker-wrap">
+                <input class="picker-input" id="giftProductSearch" placeholder="Search for gift products..." autocomplete="off" oninput="onPickerInput('giftProduct')" onfocus="onPickerFocus('giftProduct')" onblur="onPickerBlur('giftProduct')" />
+                <div class="picker-dropdown" id="giftProductDropdown" style="display:none"></div>
+              </div>
+              <div class="selected-chips" id="giftProductChips"></div>
+            </div>
+            <div class="form-group">
+              <label>Free Item Count</label>
+              <input type="number" id="promoGiftQty" placeholder="e.g. 6" min="1" step="1" style="max-width:110px" />
+            </div>
           </div>
-          <span class="badge ${p.hasTiers ? 'has-tiers' : 'no-tiers'}">${p.hasTiers ? '✓ Tiers set' : 'No tiers'}</span>
-          <span class="arrow">›</span>
-        </a>
-      `).join('');
-    }
+          <span class="hint">Cheapest matching items (up to the count above) become free. Stacks with Tier Pricing via an order-level discount.</span>
+        </div>
 
-    function searchProducts() {
-      currentQuery = document.getElementById('searchInput').value.trim();
-      prevCursors = []; cursor = null;
-      document.getElementById('prevBtn').disabled = true;
-      loadProducts(null, currentQuery);
-    }
+        <!-- Applies To (product/gift level) -->
+        <div class="form-row" id="appliesToRow">
+          <div class="form-group" style="min-width:180px">
+            <label>Discount Applies To</label>
+            <select id="promoAppliesTo" onchange="onAppliesToChange()">
+              <option value="all">All Products</option>
+              <option value="products">Specific Products</option>
+              <option value="collections">Specific Collections</option>
+            </select>
+          </div>
+          <!-- Product picker -->
+          <div class="form-group flex-1" id="productPickerGroup" style="display:none">
+            <label>Products</label>
+            <div class="picker-wrap">
+              <input class="picker-input" id="productSearch" placeholder="Search products..." autocomplete="off" oninput="onPickerInput('product')" onfocus="onPickerFocus('product')" onblur="onPickerBlur('product')" />
+              <div class="picker-dropdown" id="productDropdown" style="display:none"></div>
+            </div>
+            <div class="selected-chips" id="productChips"></div>
+          </div>
+          <!-- Collection picker -->
+          <div class="form-group flex-1" id="collectionPickerGroup" style="display:none">
+            <label>Collections</label>
+            <div class="picker-wrap">
+              <input class="picker-input" id="collectionSearch" placeholder="Search collections..." autocomplete="off" oninput="onPickerInput('collection')" onfocus="onPickerFocus('collection')" onblur="onPickerBlur('collection')" />
+              <div class="picker-dropdown" id="collectionDropdown" style="display:none"></div>
+            </div>
+            <div class="selected-chips" id="collectionChips"></div>
+          </div>
+        </div>
 
-    function changePage(dir) {
-      if (dir === 1) { prevCursors.push(cursor); loadProducts(cursor, currentQuery); }
-      else { prevCursors.pop(); loadProducts(prevCursors[prevCursors.length - 1] || null, currentQuery); }
-      document.getElementById('prevBtn').disabled = prevCursors.length === 0;
-    }
+        <!-- Minimum quantity -->
+        <div class="form-row" id="minQtyRow">
+          <div class="form-group">
+            <label>Minimum Quantity (optional)</label>
+            <input type="number" id="promoMinQty" placeholder="e.g. 24" min="0" step="1" style="max-width:110px" />
+          </div>
+          <div class="form-group flex-1" id="minQtyProductGroup">
+            <label>Count Only These Products Toward Minimum <span class="hint" style="display:inline">(leave empty to count all hat-tagged products)</span></label>
+            <div class="picker-wrap">
+              <input class="picker-input" id="minQtyProductSearch" placeholder="Search products..." autocomplete="off" oninput="onPickerInput('minQtyProduct')" onfocus="onPickerFocus('minQtyProduct')" onblur="onPickerBlur('minQtyProduct')" />
+              <div class="picker-dropdown" id="minQtyProductDropdown" style="display:none"></div>
+            </div>
+            <div class="selected-chips" id="minQtyProductChips"></div>
+          </div>
+        </div>
+      </div>
 
-    document.getElementById('searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') searchProducts(); });
-    loadProducts();
+      <div style="margin-top:20px;display:flex;gap:10px">
+        <button class="btn-primary" id="saveBtn" onclick="savePromoCode()">Add Code</button>
+        <button class="btn-secondary" id="cancelBtn" onclick="cancelEdit()" style="display:none">Cancel</button>
+      </div>
 
-    // ── Promo Codes ────────────────────────────────────────────────────────
-    async function loadPromoCodes() {
-      const res = await fetch(`/api/promo-codes?shop=${shop}`);
-      const data = await res.json();
-      promoCodes = data.codes || [];
-      renderPromoCodes();
-    }
+      <hr class="section-divider">
 
-    function onLevelChange() {
-      const level = document.getElementById('promoLevel').value;
-      const type = document.getElementById('promoType').value;
-      const noScope = type === 'none' || type === 'gift';
-      document.getElementById('appliesToRow').style.display = (level === 'order' || noScope) ? 'none' : 'flex';
-    }
-
-    function onTypeChange() {
-      const type = document.getElementById('promoType').value;
-      const isNone = type === 'none';
-      const isGift = type === 'gift';
-      document.getElementById('valueGroup').style.display = (isNone || isGift) ? 'none' : '';
-      document.getElementById('levelGroup').style.display = (isNone || isGift) ? 'none' : '';
-      document.getElementById('messageRow').style.display = isNone ? 'flex' : 'none';
-      document.getElementById('giftRow').style.display = isGift ? 'flex' : 'none';
-      document.getElementById('giftHintRow').style.display = isGift ? 'flex' : 'none';
-      onLevelChange();
-    }
-
-    function onAppliesToChange() {
-      const val = document.getElementById('promoAppliesTo').value;
-      document.getElementById('productIdsGroup').style.display = val === 'products' ? 'flex' : 'none';
-      document.getElementById('collectionIdsGroup').style.display = val === 'collections' ? 'flex' : 'none';
-    }
-
-    function renderPromoCodes() {
-      const tbody = document.getElementById('promoTableBody');
-      if (!promoCodes.length) {
-        tbody.innerHTML = '<tr><td colspan="7" class="promo-empty">No promo codes yet. Add one above.</td></tr>';
-        return;
-      }
-      const today = new Date().toISOString().slice(0, 10);
-      tbody.innerHTML = promoCodes.map((c, i) => {
-        const isExpired = c.expires && c.expires < today;
-        const levelLabel = c.discountLevel === 'order'
-          ? `<span class="lvl-badge order">Order</span>`
-          : `<span class="lvl-badge product">Product</span>`;
-        const isNone = c.type === 'none';
-        const isGift = c.type === 'gift';
-        const typeLabel = isGift
-          ? `<span class="type-badge">Free gift</span>`
-          : isNone
-          ? `<span class="type-badge">Track only</span>`
-          : c.type === 'percentage'
-            ? `<span class="type-badge pct">% off</span>`
-            : `<span class="type-badge fixed">$ off</span>`;
-        const valueLabel = isGift ? `${c.giftQty || 0} free` : isNone ? '—' : c.type === 'percentage' ? `${c.value}%` : `$${parseFloat(c.value).toFixed(2)}`;
-        const expiryLabel = c.expires
-          ? (isExpired ? `<span class="expired-badge">Expired ${c.expires}</span>` : c.expires)
-          : '—';
-
-        let appliesToLabel = 'All products';
-        if (c.appliesTo === 'products' && c.productIds?.length) {
-          appliesToLabel = `${c.productIds.length} product${c.productIds.length > 1 ? 's' : ''}`;
-        } else if (c.appliesTo === 'collections' && c.collectionIds?.length) {
-          appliesToLabel = `${c.collectionIds.length} collection${c.collectionIds.length > 1 ? 's' : ''}`;
-        } else if (c.discountLevel === 'order') {
-          appliesToLabel = 'Entire order';
-        }
-        if (isNone) appliesToLabel = 'Cart box only';
-        if (isGift) appliesToLabel = `${(c.giftProductIds || []).length} gift product${(c.giftProductIds || []).length === 1 ? '' : 's'}`;
-        if (c.minQty > 0) appliesToLabel += ` · ${c.minQty}+ hats`;
-
-        return `
+      <table class="promo-table">
+        <thead>
           <tr>
-            <td><span class="code-badge">${c.code}</span></td>
-            <td>${levelLabel}</td>
-            <td>${typeLabel}</td>
-            <td>${valueLabel}</td>
-            <td style="color:#6d7175;font-size:12px">${appliesToLabel}</td>
-            <td>${expiryLabel}</td>
-            <td><button class="btn-delete" onclick="deletePromoCode(${i})">Delete</button></td>
+            <th>Code</th><th>Level</th><th>Type</th><th>Value</th><th>Applies To</th><th>Min Qty</th><th>Expires</th><th></th>
           </tr>
-        `;
-      }).join('');
-    }
+        </thead>
+        <tbody id="promoTableBody">
+          <tr><td colspan="8" class="promo-empty">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
 
-    async function addPromoCode() {
-      const code = document.getElementById('promoCode').value.trim().toUpperCase();
-      const type = document.getElementById('promoType').value;
-      const isNone = type === 'none';
-      const isGift = type === 'gift';
-      const discountLevel = (isNone || isGift) ? 'order' : document.getElementById('promoLevel').value;
-      const value = (isNone || isGift) ? 0 : parseFloat(document.getElementById('promoValue').value);
-      const giftQty = parseInt(document.getElementById('promoGiftQty').value, 10) || 0;
-      const giftProductIds = document.getElementById('promoGiftProductIds').value.split(',')
-        .map(x => x.trim()).filter(Boolean)
-        .map(id => id.startsWith('gid://') ? id : `gid://shopify/Product/${id}`);
-      const expires = document.getElementById('promoExpires').value || null;
-      const appliesTo = discountLevel === 'order' ? 'all' : document.getElementById('promoAppliesTo').value;
-      const minQty = parseInt(document.getElementById('promoMinQty').value, 10) || 0;
-      const message = document.getElementById('promoMessage').value.trim();
+<div class="toast" id="toast"></div>
 
-      if (!code) { showToast('Enter a promo code', 'error'); return; }
-      if (!isNone && !isGift && (isNaN(value) || value <= 0)) { showToast('Enter a valid discount value', 'error'); return; }
-      if (isGift && !giftProductIds.length) { showToast('Enter at least one gift product ID', 'error'); return; }
-      if (isGift && giftQty <= 0) { showToast('Enter how many items are free', 'error'); return; }
-      if (minQty < 0) { showToast('Minimum hats must be 0 or more', 'error'); return; }
-      if (promoCodes.find(c => c.code === code)) { showToast('Code already exists', 'error'); return; }
+<script>
+const shop = new URLSearchParams(location.search).get('shop') || '';
+let cursor = null, prevCursors = [], currentQuery = '';
+let promoCodes = [];
+let editingIndex = -1;
 
-      // Parse product/collection IDs — convert numeric IDs to GIDs
-      let productIds = [];
-      let collectionIds = [];
-      if (appliesTo === 'products') {
-        const raw = document.getElementById('promoProductIds').value.trim();
-        if (!raw) { showToast('Enter at least one product ID', 'error'); return; }
-        productIds = raw.split(',').map(s => {
-          const id = s.trim();
-          return id.startsWith('gid://') ? id : `gid://shopify/Product/${id}`;
-        });
-      }
-      if (appliesTo === 'collections') {
-        const raw = document.getElementById('promoCollectionIds').value.trim();
-        if (!raw) { showToast('Enter at least one collection ID', 'error'); return; }
-        collectionIds = raw.split(',').map(s => {
-          const id = s.trim();
-          return id.startsWith('gid://') ? id : `gid://shopify/Collection/${id}`;
-        });
-      }
+// ── Tab switching ────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', ['products','promo'][i] === name));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  if (name === 'promo') loadPromoCodes();
+}
 
-      const newCode = {
-        code, discountLevel, type, value, appliesTo,
-        ...(productIds.length ? { productIds } : {}),
-        ...(collectionIds.length ? { collectionIds } : {}),
-        ...(expires ? { expires } : {}),
-        ...(minQty > 0 ? { minQty } : {}),
-        ...(isNone && message ? { message } : {}),
-        ...(isGift ? { giftProductIds, giftQty } : {}),
-      };
-      const updated = [...promoCodes, newCode];
+// ── Products tab ─────────────────────────────────────────────────────────────
+async function loadProducts(after, query) {
+  document.getElementById('productList').innerHTML = '<div class="loading">Loading...</div>';
+  const params = new URLSearchParams({ shop });
+  if (after) params.set('after', after);
+  if (query) params.set('query', query);
+  const res = await fetch('/api/products?' + params);
+  const data = await res.json();
+  if (data.error) { document.getElementById('productList').innerHTML = '<div class="empty">Error: ' + data.error + '</div>'; return; }
+  const list = document.getElementById('productList');
+  if (!data.products.length) { list.innerHTML = '<div class="empty">No products found.</div>'; return; }
+  list.innerHTML = data.products.map(p => `
+    <a class="product-card" href="/admin/product/${p.id}?shop=${shop}">
+      ${p.image ? `<img src="${p.image}" alt="${p.title}">` : '<div class="no-img">🧢</div>'}
+      <div class="product-info"><div class="name">${p.title}</div><div class="meta">${p.variantCount} variant${p.variantCount!==1?'s':''}</div></div>
+      <span class="badge ${p.hasTiers?'has-tiers':'no-tiers'}">${p.hasTiers?'✓ Tiers set':'No tiers'}</span>
+      <span class="arrow">›</span>
+    </a>`).join('');
+  document.getElementById('nextBtn').disabled = !data.hasNextPage;
+  cursor = data.endCursor;
+}
+function searchProducts() {
+  currentQuery = document.getElementById('searchInput').value.trim();
+  prevCursors = []; cursor = null; document.getElementById('prevBtn').disabled = true;
+  loadProducts(null, currentQuery);
+}
+function changePage(dir) {
+  if (dir === 1) { prevCursors.push(cursor); loadProducts(cursor, currentQuery); }
+  else { prevCursors.pop(); loadProducts(prevCursors[prevCursors.length-1]||null, currentQuery); }
+  document.getElementById('prevBtn').disabled = prevCursors.length === 0;
+}
+document.getElementById('searchInput').addEventListener('keydown', e => { if (e.key==='Enter') searchProducts(); });
+loadProducts(null, '');
 
-      const btn = document.querySelector('.btn-add');
-      btn.disabled = true; btn.textContent = 'Saving...';
+// ── Picker state ─────────────────────────────────────────────────────────────
+// Each picker: { type, searchEl, dropdownEl, chipsEl, selected: [{gid, title, image}], searchTimer }
+const pickers = {};
 
-      const res = await fetch(`/api/promo-codes?shop=${shop}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ codes: updated }),
-      });
-      const data = await res.json();
-      btn.disabled = false; btn.textContent = 'Add Code';
+function initPicker(name, searchId, dropdownId, chipsId) {
+  pickers[name] = { searchEl: document.getElementById(searchId), dropdownEl: document.getElementById(dropdownId), chipsEl: document.getElementById(chipsId), selected: [], searchTimer: null };
+}
+initPicker('product',       'productSearch',      'productDropdown',      'productChips');
+initPicker('collection',    'collectionSearch',   'collectionDropdown',   'collectionChips');
+initPicker('giftProduct',   'giftProductSearch',  'giftProductDropdown',  'giftProductChips');
+initPicker('minQtyProduct', 'minQtyProductSearch','minQtyProductDropdown','minQtyProductChips');
 
-      if (data.ok) {
-        promoCodes = updated;
-        renderPromoCodes();
-        document.getElementById('promoCode').value = '';
-        document.getElementById('promoValue').value = '';
-        document.getElementById('promoExpires').value = '';
-        document.getElementById('promoProductIds').value = '';
-        document.getElementById('promoCollectionIds').value = '';
-        document.getElementById('promoMinQty').value = '';
-        document.getElementById('promoMessage').value = '';
-        document.getElementById('promoGiftProductIds').value = '';
-        document.getElementById('promoGiftQty').value = '';
-        document.getElementById('promoAppliesTo').value = 'all';
-        onAppliesToChange();
-        showToast(`${code} added`, 'success');
-      } else {
-        showToast(data.error || 'Failed to save', 'error');
-      }
-    }
+function onPickerInput(name) {
+  const p = pickers[name];
+  clearTimeout(p.searchTimer);
+  p.searchTimer = setTimeout(() => fetchPickerResults(name, p.searchEl.value.trim()), 250);
+}
+function onPickerFocus(name) {
+  fetchPickerResults(name, pickers[name].searchEl.value.trim());
+}
+function onPickerBlur(name) {
+  setTimeout(() => { pickers[name].dropdownEl.style.display = 'none'; }, 180);
+}
 
-    async function deletePromoCode(index) {
-      const code = promoCodes[index].code;
-      if (!confirm(`Delete promo code "${code}"?`)) return;
-      const updated = promoCodes.filter((_, i) => i !== index);
-      const res = await fetch(`/api/promo-codes?shop=${shop}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ codes: updated }),
-      });
-      const data = await res.json();
-      if (data.ok) { promoCodes = updated; renderPromoCodes(); showToast(`${code} deleted`, 'success'); }
-      else showToast(data.error || 'Failed to delete', 'error');
-    }
+async function fetchPickerResults(name, query) {
+  const p = pickers[name];
+  const isCollection = name === 'collection';
+  p.dropdownEl.innerHTML = '<div class="picker-loading">Searching...</div>';
+  p.dropdownEl.style.display = 'block';
+  const endpoint = isCollection ? '/api/collections' : '/api/products';
+  const params = new URLSearchParams({ shop });
+  if (query) params.set('query', query);
+  const res = await fetch(endpoint + '?' + params);
+  const data = await res.json();
+  const items = isCollection ? (data.collections||[]) : (data.products||[]);
+  if (!items.length) { p.dropdownEl.innerHTML = '<div class="picker-loading">No results</div>'; return; }
+  p.dropdownEl.innerHTML = items.map(item => {
+    const gid = isCollection ? item.gid : ('gid://shopify/Product/' + item.id);
+    const sub = isCollection ? (item.productsCount + ' products') : (item.variantCount + ' variants');
+    const alreadySelected = p.selected.some(s => s.gid === gid);
+    return `<div class="picker-item${alreadySelected?' selected':''}" onclick="selectPickerItem('${name}','${gid}',${JSON.stringify(item.title).replace(/'/g,"\\'")},'${item.image||''}')">
+      ${item.image ? `<img src="${item.image}" alt="">` : '<div class="no-img-sm">📦</div>'}
+      <div><div class="item-title">${item.title}</div><div class="item-sub">${sub}</div></div>
+    </div>`;
+  }).join('');
+}
 
-    function showToast(msg, type) {
-      const t = document.getElementById('toast');
-      t.textContent = msg; t.className = `toast ${type} show`;
-      setTimeout(() => t.className = `toast ${type}`, 3000);
-    }
-  </script>
+function selectPickerItem(name, gid, title, image) {
+  const p = pickers[name];
+  if (!p.selected.some(s => s.gid === gid)) {
+    p.selected.push({ gid, title, image });
+    renderPickerChips(name);
+  }
+  p.dropdownEl.style.display = 'none';
+  p.searchEl.value = '';
+}
+
+function removePickerItem(name, gid) {
+  pickers[name].selected = pickers[name].selected.filter(s => s.gid !== gid);
+  renderPickerChips(name);
+}
+
+function renderPickerChips(name) {
+  const p = pickers[name];
+  p.chipsEl.innerHTML = p.selected.map(s => `
+    <span class="chip">
+      ${s.image ? `<img src="${s.image}" alt="">` : ''}
+      ${s.title}
+      <button class="chip-remove" onclick="removePickerItem('${name}','${s.gid}')" title="Remove">×</button>
+    </span>`).join('');
+}
+
+function clearAllPickers() {
+  for (const name in pickers) {
+    pickers[name].selected = [];
+    pickers[name].searchEl.value = '';
+    pickers[name].dropdownEl.style.display = 'none';
+    renderPickerChips(name);
+  }
+}
+
+function setPickerItems(name, items) {
+  // items: [{gid, title, image}]
+  pickers[name].selected = items || [];
+  renderPickerChips(name);
+}
+
+// ── Form visibility ───────────────────────────────────────────────────────────
+function onFormChange() {
+  const type = document.getElementById('promoType').value;
+  const level = document.getElementById('promoLevel').value;
+  const isNone = type === 'none';
+  const isGift = type === 'gift';
+  const isDiscount = !isNone && !isGift;
+
+  document.getElementById('valueGroup').style.display     = isDiscount ? '' : 'none';
+  document.getElementById('levelGroup').style.display     = isDiscount ? '' : 'none';
+  document.getElementById('messageRow').style.display     = isNone ? 'flex' : 'none';
+  document.getElementById('giftRow').style.display        = isGift ? 'block' : 'none';
+  // appliesToRow: show for product-level discounts (not order, not gift, not none)
+  document.getElementById('appliesToRow').style.display   = (isDiscount && level === 'product') ? 'flex' : 'none';
+  document.getElementById('minQtyRow').style.display      = (isGift || isNone || isDiscount) ? 'flex' : 'none';
+
+  if (!isDiscount || level !== 'product') {
+    document.getElementById('promoAppliesTo').value = 'all';
+    onAppliesToChange();
+  }
+}
+
+function onAppliesToChange() {
+  const val = document.getElementById('promoAppliesTo').value;
+  document.getElementById('productPickerGroup').style.display    = val === 'products'    ? '' : 'none';
+  document.getElementById('collectionPickerGroup').style.display = val === 'collections' ? '' : 'none';
+}
+
+// ── Promo codes ───────────────────────────────────────────────────────────────
+async function loadPromoCodes() {
+  const res = await fetch('/api/promo-codes?shop=' + shop);
+  const data = await res.json();
+  promoCodes = data.codes || [];
+  renderPromoCodes();
+}
+
+function renderPromoCodes() {
+  const tbody = document.getElementById('promoTableBody');
+  if (!promoCodes.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="promo-empty">No promo codes yet. Add one above.</td></tr>';
+    return;
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  tbody.innerHTML = promoCodes.map((c, i) => {
+    const isExpired = c.expires && c.expires < today;
+    const levelPill = (c.discountLevel === 'order' || c.type === 'none' || c.type === 'gift')
+      ? '<span class="pill order">Order</span>'
+      : '<span class="pill product">Product</span>';
+    const typePill = c.type === 'gift' ? '<span class="pill gift">Free Gift</span>'
+      : c.type === 'none' ? '<span class="pill track">Track Only</span>'
+      : c.type === 'percentage' ? '<span class="pill pct">% off</span>'
+      : '<span class="pill fixed">$ off</span>';
+    const val = c.type === 'gift' ? (c.giftQty||0) + ' free'
+      : c.type === 'none' ? '$0.01'
+      : c.type === 'percentage' ? c.value + '%'
+      : '$' + parseFloat(c.value||0).toFixed(2);
+    let appliesTo = 'All products';
+    if (c.type === 'gift') appliesTo = (c.giftProductIds||[]).length + ' gift product(s)';
+    else if (c.type === 'none') appliesTo = 'Cart + checkout';
+    else if (c.discountLevel === 'order') appliesTo = 'Entire order';
+    else if (c.appliesTo === 'products' && c.productIds?.length) appliesTo = c.productIds.length + ' product(s)';
+    else if (c.appliesTo === 'collections' && c.collectionIds?.length) appliesTo = c.collectionIds.length + ' collection(s)';
+    const minQtyStr = c.minQty > 0
+      ? c.minQty + (c.minQtyProductIds?.length ? ' (specific)' : ' (hats)')
+      : '—';
+    const expiry = c.expires
+      ? (isExpired ? '<span class="expired-pill">Expired ' + c.expires + '</span>' : c.expires)
+      : '—';
+    return `<tr>
+      <td><span class="code-badge">${c.code}</span></td>
+      <td>${levelPill}</td><td>${typePill}</td><td>${val}</td>
+      <td style="color:#6d7175;font-size:12px">${appliesTo}</td>
+      <td style="color:#6d7175;font-size:12px">${minQtyStr}</td>
+      <td>${expiry}</td>
+      <td style="white-space:nowrap">
+        <button class="btn-edit" onclick="editPromoCode(${i})">Edit</button>
+        <button class="btn-delete" onclick="deletePromoCode(${i})">Delete</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function editPromoCode(index) {
+  const c = promoCodes[index];
+  editingIndex = index;
+
+  document.getElementById('editBanner').style.display = 'flex';
+  document.getElementById('editBannerCode').textContent = c.code;
+  document.getElementById('formTitle').textContent = 'Edit Promo Code';
+  document.getElementById('saveBtn').textContent = 'Save Changes';
+  document.getElementById('cancelBtn').style.display = '';
+  document.getElementById('promoCode').value = c.code;
+  document.getElementById('promoCode').disabled = true; // code is the key, can't change it
+  document.getElementById('promoType').value = c.type || 'percentage';
+  document.getElementById('promoLevel').value = c.discountLevel || 'product';
+  document.getElementById('promoValue').value = c.value || '';
+  document.getElementById('promoExpires').value = c.expires || '';
+  document.getElementById('promoMinQty').value = c.minQty || '';
+  document.getElementById('promoMessage').value = c.message || '';
+  document.getElementById('promoGiftQty').value = c.giftQty || '';
+  document.getElementById('promoAppliesTo').value = c.appliesTo || 'all';
+
+  clearAllPickers();
+
+  // Restore product picker selections
+  if (c.appliesTo === 'products' && c.productIds?.length) {
+    setPickerItems('product', c.productIds.map(gid => ({ gid, title: gid.split('/').pop(), image: '' })));
+  }
+  if (c.appliesTo === 'collections' && c.collectionIds?.length) {
+    setPickerItems('collection', c.collectionIds.map(gid => ({ gid, title: gid.split('/').pop(), image: '' })));
+  }
+  if (c.giftProductIds?.length) {
+    setPickerItems('giftProduct', c.giftProductIds.map(gid => ({ gid, title: gid.split('/').pop(), image: '' })));
+  }
+  if (c.minQtyProductIds?.length) {
+    setPickerItems('minQtyProduct', c.minQtyProductIds.map(gid => ({ gid, title: gid.split('/').pop(), image: '' })));
+  }
+
+  onFormChange();
+  onAppliesToChange();
+  document.getElementById('tab-promo').scrollTop = 0;
+  window.scrollTo(0, 0);
+}
+
+function cancelEdit() {
+  editingIndex = -1;
+  document.getElementById('editBanner').style.display = 'none';
+  document.getElementById('formTitle').textContent = 'Add Promo Code';
+  document.getElementById('saveBtn').textContent = 'Add Code';
+  document.getElementById('cancelBtn').style.display = 'none';
+  document.getElementById('promoCode').disabled = false;
+  resetForm();
+}
+
+function resetForm() {
+  document.getElementById('promoCode').value = '';
+  document.getElementById('promoCode').disabled = false;
+  document.getElementById('promoType').value = 'percentage';
+  document.getElementById('promoLevel').value = 'product';
+  document.getElementById('promoValue').value = '';
+  document.getElementById('promoExpires').value = '';
+  document.getElementById('promoMinQty').value = '';
+  document.getElementById('promoMessage').value = '';
+  document.getElementById('promoGiftQty').value = '';
+  document.getElementById('promoAppliesTo').value = 'all';
+  clearAllPickers();
+  onFormChange();
+  onAppliesToChange();
+}
+
+async function savePromoCode() {
+  const code = document.getElementById('promoCode').value.trim().toUpperCase();
+  const type = document.getElementById('promoType').value;
+  const isNone = type === 'none';
+  const isGift = type === 'gift';
+  const discountLevel = (isNone || isGift) ? 'order' : document.getElementById('promoLevel').value;
+  const value = (isNone || isGift) ? 0 : parseFloat(document.getElementById('promoValue').value);
+  const expires = document.getElementById('promoExpires').value || null;
+  const minQty = parseInt(document.getElementById('promoMinQty').value, 10) || 0;
+  const message = document.getElementById('promoMessage').value.trim();
+  const giftQty = parseInt(document.getElementById('promoGiftQty').value, 10) || 0;
+  const appliesTo = discountLevel === 'order' ? 'all' : document.getElementById('promoAppliesTo').value;
+
+  if (!code) { showToast('Enter a promo code', 'error'); return; }
+  if (!isNone && !isGift && (isNaN(value) || value <= 0)) { showToast('Enter a valid discount value', 'error'); return; }
+  if (isGift && pickers.giftProduct.selected.length === 0) { showToast('Select at least one gift product', 'error'); return; }
+  if (isGift && giftQty <= 0) { showToast('Enter how many items are free', 'error'); return; }
+  if (editingIndex === -1 && promoCodes.find(c => c.code === code)) { showToast('Code already exists', 'error'); return; }
+
+  const productIds = pickers.product.selected.map(s => s.gid);
+  const collectionIds = pickers.collection.selected.map(s => s.gid);
+  const giftProductIds = pickers.giftProduct.selected.map(s => s.gid);
+  const minQtyProductIds = pickers.minQtyProduct.selected.map(s => s.gid);
+
+  if (appliesTo === 'products' && !productIds.length) { showToast('Select at least one product', 'error'); return; }
+  if (appliesTo === 'collections' && !collectionIds.length) { showToast('Select at least one collection', 'error'); return; }
+
+  const entry = {
+    code, discountLevel, type, value, appliesTo,
+    ...(productIds.length ? { productIds } : {}),
+    ...(collectionIds.length ? { collectionIds } : {}),
+    ...(expires ? { expires } : {}),
+    ...(minQty > 0 ? { minQty } : {}),
+    ...(minQtyProductIds.length ? { minQtyProductIds } : {}),
+    ...(isNone && message ? { message } : {}),
+    ...(isGift ? { giftProductIds, giftQty } : {}),
+  };
+
+  let updated;
+  if (editingIndex >= 0) {
+    updated = promoCodes.map((c, i) => i === editingIndex ? entry : c);
+  } else {
+    updated = [...promoCodes, entry];
+  }
+
+  const btn = document.getElementById('saveBtn');
+  btn.disabled = true; btn.textContent = 'Saving...';
+
+  const res = await fetch('/api/promo-codes?shop=' + shop, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ codes: updated }),
+  });
+  const data = await res.json();
+  btn.disabled = false;
+  btn.textContent = editingIndex >= 0 ? 'Save Changes' : 'Add Code';
+
+  if (data.ok) {
+    promoCodes = updated;
+    renderPromoCodes();
+    cancelEdit();
+    showToast(editingIndex >= 0 ? code + ' updated' : code + ' added', 'success');
+    editingIndex = -1;
+    document.getElementById('saveBtn').textContent = 'Add Code';
+  } else {
+    showToast(data.error || 'Failed to save', 'error');
+  }
+}
+
+async function deletePromoCode(index) {
+  const code = promoCodes[index].code;
+  if (!confirm('Delete promo code "' + code + '"?')) return;
+  const updated = promoCodes.filter((_, i) => i !== index);
+  const res = await fetch('/api/promo-codes?shop=' + shop, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ codes: updated }),
+  });
+  const data = await res.json();
+  if (data.ok) { promoCodes = updated; renderPromoCodes(); showToast(code + ' deleted', 'success'); }
+  else showToast(data.error || 'Failed to delete', 'error');
+}
+
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast ' + type + ' show';
+  setTimeout(() => t.className = 'toast ' + type, 3000);
+}
+
+// Init form state
+onFormChange();
+onAppliesToChange();
+</script>
 </body>
 </html>

@@ -244,7 +244,37 @@ app.post("/api/product/:id/tiers", async (req, res) => {
   res.json({ ok: true });
 });
 
-// Finds this app's automatic discount(s) (Tier Pricing) by app key, not by title.
+// ── API: collections search ────────────────────────────────────────────────
+
+app.get("/api/collections", async (req, res) => {
+  const { shop, query } = req.query;
+  const token = tokenStore[shop];
+  if (!token) return res.status(401).json({ error: "Not authenticated. Please reinstall the app." });
+
+  const searchFilter = query ? `, query: "${query}"` : "";
+
+  const data = await gql(shop, token, `{
+    collections(first: 20${searchFilter}) {
+      nodes {
+        id
+        title
+        image { url }
+        productsCount { count }
+      }
+    }
+  }`);
+
+  const nodes = data?.data?.collections?.nodes ?? [];
+  res.json({
+    collections: nodes.map(c => ({
+      id: c.id.split("/").pop(),
+      gid: c.id,
+      title: c.title,
+      image: c.image?.url ?? null,
+      productsCount: c.productsCount?.count ?? 0,
+    })),
+  });
+});
 // Uses discountNodes (covers every discount type) and also returns everything it saw.
 async function findTierAutomaticDiscounts(shop, token) {
   const found = [];
@@ -415,38 +445,35 @@ async function resolveCollectionProductIds(shop, token, collectionIds) {
 async function syncOnePromo(shop, token, promo) {
   const code = String(promo.code).toUpperCase().trim();
   const isOrder = promo.discountLevel === "order";
-
-  // "Track only" codes (e.g. SIXFREE): no money off, so they are NOT Shopify discount
-  // codes (checkout drops a code that gives $0). The cart page applies them as the
-  // "Promo Code" cart attribute, which is saved on the order. Remove any old discount.
-  if (promo.type === "none") return await deletePromoDiscount(shop, token, code);
+  const isNone = promo.type === "none";
 
   // Settings the function reads. Collections are resolved to product IDs here.
   let productIds = Array.isArray(promo.productIds) ? promo.productIds : [];
-  if (!isOrder && promo.appliesTo === "collections") {
+  if (!isOrder && !isNone && promo.appliesTo === "collections") {
     productIds = await resolveCollectionProductIds(shop, token, promo.collectionIds ?? []);
   }
+
+  // minQtyProductIds: specific products that count toward the minimum qty
+  const minQtyProductIds = Array.isArray(promo.minQtyProductIds) ? promo.minQtyProductIds : [];
+
   const config = {
     code,
-    discountLevel: (isOrder || promo.type === "gift") ? "order" : "product",
-    type: promo.type,
-    value: promo.value,
-    appliesTo: isOrder ? "all" : (promo.appliesTo ?? "all"),
+    discountLevel: (isOrder || promo.type === "gift" || isNone) ? "order" : "product",
+    type: isNone ? "trackonly" : promo.type,
+    value: isNone ? 0.01 : promo.value,
+    appliesTo: (isOrder || isNone) ? "all" : (promo.appliesTo ?? "all"),
     productIds,
     expires: promo.expires ?? "",
     minQty: Math.max(0, parseInt(promo.minQty ?? 0, 10) || 0),
-    // type "gift" (e.g. SIXFREE): these products can be free, up to giftQty items
+    minQtyProductIds, // if set, only these products count toward minQty
+    message: isNone ? String(promo.message ?? "") : "",
     giftProductIds: Array.isArray(promo.giftProductIds) ? promo.giftProductIds : [],
     giftQty: Math.max(0, parseInt(promo.giftQty ?? 0, 10) || 0),
   };
 
   const discountInput = {
     title: PROMO_TITLE_PREFIX + code,
-    // Always an ORDER discount: without Shopify Plus, two product discounts can't apply
-    // to the same item, so a product-class promo would be rejected next to Tier Pricing.
-    // The function still limits "product" promos to the matching products.
     discountClasses: ["ORDER"],
-    // Combines with product discounts (Tier Pricing); not with other order codes.
     combinesWith: { productDiscounts: true, orderDiscounts: false, shippingDiscounts: true },
     endsAt: promo.expires ? `${promo.expires}T23:59:59Z` : null,
   };
@@ -529,8 +556,8 @@ async function syncPromoCodes(shop, token, codes, previousCodes = []) {
   return errors;
 }
 
-// Track-only codes for the cart page (theme reads shop.metafields.custom.tracking_codes).
-// Only track-only codes are published here; real discount codes stay private.
+// Track-only codes: still write metafield for theme cart page display,
+// but now they also exist as real Shopify discounts ($0.01) so they work at checkout too.
 async function writeTrackingCodes(shop, token, shopId, codes) {
   const today = new Date().toISOString().slice(0, 10);
   const tracking = codes
@@ -538,6 +565,7 @@ async function writeTrackingCodes(shop, token, shopId, codes) {
     .map(c => ({
       code: String(c.code).toUpperCase().trim(),
       minQty: Math.max(0, parseInt(c.minQty ?? 0, 10) || 0),
+      minQtyProductIds: Array.isArray(c.minQtyProductIds) ? c.minQtyProductIds : [],
       message: String(c.message ?? ""),
       expires: c.expires ?? "",
     }));

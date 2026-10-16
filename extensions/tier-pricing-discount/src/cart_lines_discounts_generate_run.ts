@@ -25,12 +25,14 @@ type Tier = { qty: number; price: number };
 type Promo = {
   code: string;
   discountLevel: string; // "product" | "order"
-  type: string; // "percentage" | "fixed"
+  type: string; // "percentage" | "fixed" | "gift" | "trackonly"
   value: number;
   appliesTo: string; // "all" | "products" | "collections"
   productIds: string[]; // for "collections" the app resolves collection -> product IDs
   expires: string;
-  minQty: number; // minimum number of hats ("Hat Product" tag, add-ons excluded); 0 = no minimum
+  minQty: number; // minimum quantity; 0 = no minimum
+  minQtyProductIds: string[]; // if non-empty, only these products count toward minQty
+  message: string; // track-only: message shown in cart
   giftProductIds: string[]; // type "gift": products that can be free (e.g. beanies)
   giftQty: number; // type "gift": how many gift items are free (e.g. 6)
 };
@@ -87,8 +89,9 @@ function parsePromo(raw: string | null | undefined): Promo | null {
     const item = JSON.parse(raw);
     if (!item || !item.code || !item.type) return null;
     const isGift = String(item.type) === "gift";
-    const value = isGift ? 0 : parseFloat(item.value);
-    if (!isGift && (isNaN(value) || value <= 0)) return null;
+    const isTrackOnly = String(item.type) === "trackonly";
+    const value = (isGift || isTrackOnly) ? (isTrackOnly ? 0.01 : 0) : parseFloat(item.value);
+    if (!isGift && !isTrackOnly && (isNaN(value) || value <= 0)) return null;
     const giftProductIds = Array.isArray(item.giftProductIds) ? item.giftProductIds.map(String) : [];
     const giftQty = Math.max(0, parseInt(String(item.giftQty ?? 0), 10) || 0);
     if (isGift && (!giftProductIds.length || giftQty <= 0)) return null;
@@ -103,6 +106,8 @@ function parsePromo(raw: string | null | undefined): Promo | null {
       productIds: Array.isArray(item.productIds) ? item.productIds.map(String) : [],
       expires: String(item.expires ?? ""),
       minQty: Math.max(0, parseInt(String(item.minQty ?? 0), 10) || 0),
+      minQtyProductIds: Array.isArray(item.minQtyProductIds) ? item.minQtyProductIds.map(String) : [],
+      message: String(item.message ?? ""),
       giftProductIds,
       giftQty,
     };
@@ -242,33 +247,53 @@ export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsG
     return tierPrice === undefined ? basePrice : Math.min(basePrice, tierPrice);
   }
 
-  // ── Free gift (e.g. SIXFREE: 24+ hats -> up to 6 beanies free) ──────────
-  // The gift items must be in the cart. The cheapest gift units (after tier
-  // pricing) are made free via an order discount limited to the gift lines.
-  // Free units do not count toward the hat minimum.
+  // ── Track-only ($0.01): just apply the tiny fixed discount ────────────────
+  if (promo.type === "trackonly") {
+    return {
+      operations: [
+        {
+          orderDiscountsAdd: {
+            candidates: [
+              {
+                message: promo.message || promo.code,
+                targets: [{ orderSubtotal: { excludedCartLineIds: [] } }],
+                value: { fixedAmount: { amount: "0.01" } },
+              },
+            ],
+            selectionStrategy: OrderDiscountSelectionStrategy.First,
+          },
+        },
+      ],
+    } as any;
+  }
+
+  // ── Free gift ──────────────────────────────────────────────────────────────
   if (promo.type === "gift") {
-    const units: { price: number; isHat: boolean }[] = [];
+    const units: { price: number; isQualifying: boolean }[] = [];
     const giftLineIds: Record<string, boolean> = {};
-    let totalHats = 0;
+    let totalQualifying = 0;
     for (const line of lines) {
       const productGid: string = line.merchandise?.product?.id ?? "";
-      const isHat = line.merchandise?.product?.isHat === true && line.isAddon?.value !== "true";
-      if (isHat) totalHats += line.quantity;
+      // qualifying products: if minQtyProductIds is set use those, else fall back to isHat tag
+      const isQualifying = promo.minQtyProductIds.length > 0
+        ? promo.minQtyProductIds.indexOf(productGid) !== -1 && line.isAddon?.value !== "true"
+        : line.merchandise?.product?.isHat === true && line.isAddon?.value !== "true";
+      if (isQualifying) totalQualifying += line.quantity;
       if (productGid !== "" && promo.giftProductIds.indexOf(productGid) !== -1) {
         giftLineIds[line.id] = true;
         const unit = unitAfterTier(line);
-        for (let i = 0; i < line.quantity && units.length < 1000; i++) units.push({ price: unit, isHat });
+        for (let i = 0; i < line.quantity && units.length < 1000; i++) units.push({ price: unit, isQualifying });
       }
     }
     units.sort((a, b) => a.price - b.price);
     let freeValue = 0;
-    let freeHatUnits = 0;
+    let freeQualifyingUnits = 0;
     const freeCount = Math.min(promo.giftQty, units.length);
     for (let i = 0; i < freeCount; i++) {
       freeValue += units[i].price;
-      if (units[i].isHat) freeHatUnits += 1;
+      if (units[i].isQualifying) freeQualifyingUnits += 1;
     }
-    if (promo.minQty > 0 && totalHats - freeHatUnits < promo.minQty) return { operations: [] };
+    if (promo.minQty > 0 && totalQualifying - freeQualifyingUnits < promo.minQty) return { operations: [] };
     freeValue = round2(freeValue);
     if (freeValue <= 0) return { operations: [] };
     const giftExcluded: string[] = [];
@@ -294,7 +319,7 @@ export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsG
   const excludedCartLineIds: string[] = [];
   let eligibleSubtotal = 0;
   let fixedTotal = 0;
-  let qualifyingHats = 0;
+  let qualifyingQty = 0;
   for (const line of lines) {
     const productGid: string = line.merchandise?.product?.id ?? "";
     const eligible =
@@ -303,17 +328,18 @@ export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsG
       excludedCartLineIds.push(line.id);
       continue;
     }
-    // Hats count toward the minimum; add-ons (side flags etc.) and non-hat products don't
-    if (line.merchandise?.product?.isHat === true && line.isAddon?.value !== "true") {
-      qualifyingHats += line.quantity;
-    }
+    // Count toward minimum: if minQtyProductIds set, only those products count;
+    // otherwise fall back to "Hat Product" tag (add-ons excluded)
+    const countsTowardMin = promo.minQtyProductIds.length > 0
+      ? promo.minQtyProductIds.indexOf(productGid) !== -1 && line.isAddon?.value !== "true"
+      : line.merchandise?.product?.isHat === true && line.isAddon?.value !== "true";
+    if (countsTowardMin) qualifyingQty += line.quantity;
     const unit = unitAfterTier(line);
     eligibleSubtotal += unit * line.quantity;
     fixedTotal += Math.min(promo.value, unit) * line.quantity;
   }
   if (eligibleSubtotal <= 0) return { operations: [] };
-  // Minimum number of hats not reached -> code is "valid but not applicable"
-  if (promo.minQty > 0 && qualifyingHats < promo.minQty) return { operations: [] };
+  if (promo.minQty > 0 && qualifyingQty < promo.minQty) return { operations: [] };
 
   let value: any;
   if (promo.type === "percentage") {
