@@ -252,13 +252,26 @@ export function cartLinesDiscountsGenerateRun(input: Input): CartLinesDiscountsG
   // ── Track-only ($0.01): just apply the tiny fixed discount ────────────────
   const normalize = (id: string) => String(id).split("/").pop() ?? id;
   if (promo.type === "trackonly") {
+    // Same minimum rule as the other codes: if minQtyProductIds is set only those
+    // products count, otherwise "Hat Product" items (add-ons never count).
+    if (promo.minQty > 0) {
+      let qualifying = 0;
+      for (const line of lines) {
+        const productGid: string = line.merchandise?.product?.id ?? "";
+        const counts = promo.minQtyProductIds.length > 0
+          ? promo.minQtyProductIds.some(id => normalize(id) === normalize(productGid)) && line.isAddon?.value !== "true"
+          : line.merchandise?.product?.isHat === true && line.isAddon?.value !== "true";
+        if (counts) qualifying += line.quantity;
+      }
+      if (qualifying < promo.minQty) return { operations: [] };
+    }
     return {
       operations: [
         {
           orderDiscountsAdd: {
             candidates: [
               {
-                message: promo.message || promo.code,
+                message: promo.code,
                 targets: [{ orderSubtotal: { excludedCartLineIds: [] } }],
                 value: { fixedAmount: { amount: "0.01" } },
               },

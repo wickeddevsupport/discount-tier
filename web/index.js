@@ -561,7 +561,10 @@ async function syncPromoCodes(shop, token, codes, previousCodes = []) {
 async function writeTrackingCodes(shop, token, shopId, codes) {
   const today = new Date().toISOString().slice(0, 10);
   const tracking = codes
-    .filter(c => c.type === "none" && !(c.expires && c.expires < today))
+    // Track-only codes are now real Shopify discount codes ($0.01), so the cart page must
+    // apply them as discount codes. Publishing them here made the cart save them as a
+    // note only, so they never reached checkout. Keep the metafield, but empty.
+    .filter(() => false)
     .map(c => ({
       code: String(c.code).toUpperCase().trim(),
       minQty: Math.max(0, parseInt(c.minQty ?? 0, 10) || 0),
