@@ -408,16 +408,115 @@ async function findCodeDiscount(shop, token, code) {
     query($code: String!) {
       codeDiscountNodeByCode(code: $code) {
         id
-        codeDiscount { __typename ... on DiscountCodeApp { title discountClasses } }
+        codeDiscount {
+          __typename
+          ... on DiscountCodeApp { title discountClasses }
+          ... on DiscountCodeBasic { title }
+          ... on DiscountCodeBxgy { title }
+        }
       }
     }
   `, { code });
   return data?.data?.codeDiscountNodeByCode ?? null;
 }
 
+const OUR_PROMO_TYPES = ["DiscountCodeApp", "DiscountCodeBasic", "DiscountCodeBxgy"];
+
 function isOurPromoDiscount(node) {
-  return node?.codeDiscount?.__typename === "DiscountCodeApp" &&
+  return OUR_PROMO_TYPES.includes(node?.codeDiscount?.__typename) &&
     String(node.codeDiscount.title ?? "").startsWith(PROMO_TITLE_PREFIX);
+}
+
+// ── Native fallback (no Shopify Function) ─────────────────────────────────
+//
+// Shopify only lets custom apps activate NEW function discounts on Shopify Plus
+// stores ("Shop must be on a Shopify Plus plan to activate functions from a
+// custom app"). Stitch Rebellion is not on Plus, so new promo codes are created
+// as normal Shopify discount codes instead. They work on every plan, show up the
+// same way in the cart, and combine with the Tier Pricing discount.
+// Supported this way: track-only, $ off the whole order, free gift.
+
+const PLUS_ONLY_ERROR = /shopify plus/i;
+
+async function hatProductIds(shop, token) {
+  const ids = [];
+  let after = null;
+  for (let page = 0; page < 20; page++) {
+    const data = await gql(shop, token, `
+      query($after: String) {
+        products(first: 250, after: $after, query: "tag:'Hat Product'") { nodes { id } pageInfo { hasNextPage endCursor } }
+      }
+    `, { after });
+    const conn = data?.data?.products;
+    if (!conn) break;
+    for (const n of conn.nodes) ids.push(n.id);
+    if (!conn.pageInfo.hasNextPage) break;
+    after = conn.pageInfo.endCursor;
+  }
+  return ids;
+}
+
+function toProductGid(id) {
+  const s = String(id);
+  return s.startsWith("gid://") ? s : `gid://shopify/Product/${s}`;
+}
+
+async function createNativePromo(shop, token, config, base) {
+  const { code } = config;
+  // Products that count toward the minimum: the chosen ones, else every hat (same rule as the function).
+  const minIds = config.minQtyProductIds.length
+    ? config.minQtyProductIds.map(toProductGid)
+    : await hatProductIds(shop, token);
+  if (!minIds.length) return `${code}: no hat products found to apply this code to.`;
+  const minimum = config.minQty > 0 ? { quantity: { greaterThanOrEqualToQuantity: String(config.minQty) } } : null;
+  const common = {
+    title: base.title,
+    code,
+    startsAt: new Date().toISOString(),
+    endsAt: base.endsAt,
+    context: { all: "ALL" },
+    combinesWith: { productDiscounts: true, orderDiscounts: false, shippingDiscounts: true },
+  };
+
+  if (config.type === "gift") {
+    if (!config.giftProductIds.length || config.giftQty <= 0) return `${code}: choose the free products and how many are free.`;
+    const data = await gql(shop, token, `
+      mutation($d: DiscountCodeBxgyInput!) {
+        discountCodeBxgyCreate(bxgyCodeDiscount: $d) { userErrors { field message } }
+      }
+    `, { d: {
+      ...common,
+      usesPerOrderLimit: 1,
+      customerBuys: { value: { quantity: String(Math.max(1, config.minQty)) }, items: { products: { productsToAdd: minIds } } },
+      customerGets: {
+        value: { discountOnQuantity: { quantity: String(config.giftQty), effect: { percentage: 1.0 } } },
+        items: { products: { productsToAdd: config.giftProductIds.map(toProductGid) } },
+      },
+    } });
+    const errs = data?.data?.discountCodeBxgyCreate?.userErrors ?? data?.errors ?? [];
+    return errs.length ? `${code}: ${errs[0].message}` : null;
+  }
+
+  if (config.type === "trackonly" || (config.type === "fixed" && config.discountLevel === "order")) {
+    // Applied to the hats only, so the minimum counts hats (add-ons like flags don't count).
+    const amount = config.type === "trackonly" ? "0.01" : String(config.value);
+    const data = await gql(shop, token, `
+      mutation($d: DiscountCodeBasicInput!) {
+        discountCodeBasicCreate(basicCodeDiscount: $d) { userErrors { field message } }
+      }
+    `, { d: {
+      ...common,
+      minimumRequirement: minimum,
+      customerGets: {
+        value: { discountAmount: { amount, appliesOnEachItem: false } },
+        items: { products: { productsToAdd: minIds } },
+      },
+    } });
+    const errs = data?.data?.discountCodeBasicCreate?.userErrors ?? data?.errors ?? [];
+    return errs.length ? `${code}: ${errs[0].message}` : null;
+  }
+
+  return `${code}: Shopify only allows this code type on Shopify Plus stores. Track-only, $ off the order and free gift codes still work.`;
 }
 
 async function resolveCollectionProductIds(shop, token, collectionIds) {
@@ -493,6 +592,13 @@ async function syncOnePromo(shop, token, promo) {
     return `${code}: this code is already used by another discount in Shopify. Delete or rename that one first.`;
   }
 
+  // Codes made as normal Shopify discounts (no Plus): recreate them with the latest settings.
+  if (existing && existing.codeDiscount.__typename !== "DiscountCodeApp") {
+    const del = await deletePromoDiscount(shop, token, code);
+    if (del) return del;
+    return createNativePromo(shop, token, config, discountInput);
+  }
+
   if (existing) {
     const data = await gql(shop, token, `
       mutation($id: ID!, $d: DiscountCodeAppInput!) {
@@ -527,6 +633,10 @@ async function syncOnePromo(shop, token, promo) {
     },
   });
   const errs = data?.data?.discountCodeAppCreate?.userErrors ?? data?.errors ?? [];
+  if (errs.length && PLUS_ONLY_ERROR.test(String(errs[0].message))) {
+    console.log(`${code}: function discounts need Shopify Plus, creating a normal Shopify discount code instead`);
+    return createNativePromo(shop, token, config, discountInput);
+  }
   return errs.length ? `${code}: ${errs[0].message}` : null;
 }
 
