@@ -434,40 +434,16 @@ function isOurPromoDiscount(node) {
 // custom app"). Stitch Rebellion is not on Plus, so new promo codes are created
 // as normal Shopify discount codes instead. They work on every plan, show up the
 // same way in the cart, and combine with the Tier Pricing discount.
-// Supported this way: track-only, $ off the whole order, free gift.
+// They are ORDER discounts (like the function promo codes), because Shopify gives
+// each cart line only one product discount and the hats already get Tier Pricing.
+// Limit: Shopify counts every cart item toward an order discount's minimum
+// quantity (add-ons too), not only hats.
+// Supported this way: track-only and $ off the whole order.
 
 const PLUS_ONLY_ERROR = /shopify plus/i;
 
-async function hatProductIds(shop, token) {
-  const ids = [];
-  let after = null;
-  for (let page = 0; page < 20; page++) {
-    const data = await gql(shop, token, `
-      query($after: String) {
-        products(first: 250, after: $after, query: "tag:'Hat Product'") { nodes { id } pageInfo { hasNextPage endCursor } }
-      }
-    `, { after });
-    const conn = data?.data?.products;
-    if (!conn) break;
-    for (const n of conn.nodes) ids.push(n.id);
-    if (!conn.pageInfo.hasNextPage) break;
-    after = conn.pageInfo.endCursor;
-  }
-  return ids;
-}
-
-function toProductGid(id) {
-  const s = String(id);
-  return s.startsWith("gid://") ? s : `gid://shopify/Product/${s}`;
-}
-
 async function createNativePromo(shop, token, config, base) {
   const { code } = config;
-  // Products that count toward the minimum: the chosen ones, else every hat (same rule as the function).
-  const minIds = config.minQtyProductIds.length
-    ? config.minQtyProductIds.map(toProductGid)
-    : await hatProductIds(shop, token);
-  if (!minIds.length) return `${code}: no hat products found to apply this code to.`;
   const minimum = config.minQty > 0 ? { quantity: { greaterThanOrEqualToQuantity: String(config.minQty) } } : null;
   const common = {
     title: base.title,
@@ -478,27 +454,8 @@ async function createNativePromo(shop, token, config, base) {
     combinesWith: { productDiscounts: true, orderDiscounts: false, shippingDiscounts: true },
   };
 
-  if (config.type === "gift") {
-    if (!config.giftProductIds.length || config.giftQty <= 0) return `${code}: choose the free products and how many are free.`;
-    const data = await gql(shop, token, `
-      mutation($d: DiscountCodeBxgyInput!) {
-        discountCodeBxgyCreate(bxgyCodeDiscount: $d) { userErrors { field message } }
-      }
-    `, { d: {
-      ...common,
-      usesPerOrderLimit: 1,
-      customerBuys: { value: { quantity: String(Math.max(1, config.minQty)) }, items: { products: { productsToAdd: minIds } } },
-      customerGets: {
-        value: { discountOnQuantity: { quantity: String(config.giftQty), effect: { percentage: 1.0 } } },
-        items: { products: { productsToAdd: config.giftProductIds.map(toProductGid) } },
-      },
-    } });
-    const errs = data?.data?.discountCodeBxgyCreate?.userErrors ?? data?.errors ?? [];
-    return errs.length ? `${code}: ${errs[0].message}` : null;
-  }
-
   if (config.type === "trackonly" || (config.type === "fixed" && config.discountLevel === "order")) {
-    // Applied to the hats only, so the minimum counts hats (add-ons like flags don't count).
+    // Order discount (items: all) so it stacks with the Tier Pricing product discount.
     const amount = config.type === "trackonly" ? "0.01" : String(config.value);
     const data = await gql(shop, token, `
       mutation($d: DiscountCodeBasicInput!) {
@@ -509,14 +466,14 @@ async function createNativePromo(shop, token, config, base) {
       minimumRequirement: minimum,
       customerGets: {
         value: { discountAmount: { amount, appliesOnEachItem: false } },
-        items: { products: { productsToAdd: minIds } },
+        items: { all: true },
       },
     } });
     const errs = data?.data?.discountCodeBasicCreate?.userErrors ?? data?.errors ?? [];
     return errs.length ? `${code}: ${errs[0].message}` : null;
   }
 
-  return `${code}: Shopify only allows this code type on Shopify Plus stores. Track-only, $ off the order and free gift codes still work.`;
+  return `${code}: Shopify only allows this code type on Shopify Plus stores. Track-only and $ off the order codes still work.`;
 }
 
 async function resolveCollectionProductIds(shop, token, collectionIds) {
