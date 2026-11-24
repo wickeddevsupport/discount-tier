@@ -633,24 +633,31 @@ async function updateAppDiscount(shop, token, id, d, configMetafield, code) {
 const SLOT_TITLE = PROMO_TITLE_PREFIX + "free slot (do not delete)";
 
 async function listOurAppDiscounts(shop, token) {
+  // Same listing as findTierAutomaticDiscounts (known to work on this store).
+  // Every app promo discount is titled PROMO_TITLE_PREFIX + code, and parked
+  // slots are titled SLOT_TITLE, so the code is read from the title.
   const out = [];
   let after = null;
   for (let page = 0; page < 10; page++) {
     const data = await gql(shop, token, `
       query($after: String) {
-        codeDiscountNodes(first: 100, after: $after) {
-          nodes { id codeDiscount { __typename ... on DiscountCodeApp { title codes(first: 1) { nodes { code } } } } }
+        discountNodes(first: 100, after: $after) {
+          nodes { id discount { __typename ... on DiscountCodeApp { title appDiscountType { appKey } } } }
           pageInfo { hasNextPage endCursor }
         }
       }
     `, { after });
-    const conn = data?.data?.codeDiscountNodes;
+    if (data?.errors) { console.log("listOurAppDiscounts errors:", JSON.stringify(data.errors)); break; }
+    const conn = data?.data?.discountNodes;
     if (!conn) break;
     for (const n of conn.nodes) {
-      const d = n.codeDiscount;
-      if (d?.__typename === "DiscountCodeApp" && String(d.title ?? "").startsWith(PROMO_TITLE_PREFIX)) {
-        out.push({ id: n.id, code: String(d.codes?.nodes?.[0]?.code ?? "").toUpperCase().trim() });
-      }
+      const d = n.discount;
+      const title = String(d?.title ?? "");
+      if (d?.__typename !== "DiscountCodeApp" || !title.startsWith(PROMO_TITLE_PREFIX)) continue;
+      if (d.appDiscountType?.appKey && d.appDiscountType.appKey !== CLIENT_ID) continue;
+      const code = title === SLOT_TITLE ? "" : title.slice(PROMO_TITLE_PREFIX.length).toUpperCase().trim();
+      // App discount ids for discountCodeAppUpdate are DiscountCodeNode ids.
+      out.push({ id: n.id.replace("/DiscountNode/", "/DiscountCodeNode/"), code });
     }
     if (!conn.pageInfo.hasNextPage) break;
     after = conn.pageInfo.endCursor;
