@@ -390,7 +390,8 @@ app.get("/api/promo-codes", async (req, res) => {
   if (raw) {
     try { codes = JSON.parse(raw); } catch { codes = []; }
   }
-  res.json({ codes });
+  const freeSlots = (await findFreeSlots(shop, token, codes)).length;
+  res.json({ codes, freeSlots });
 });
 
 // ── Promo codes → real Shopify code discounts ─────────────────────────────
@@ -498,7 +499,7 @@ async function resolveCollectionProductIds(shop, token, collectionIds) {
   return ids;
 }
 
-async function syncOnePromo(shop, token, promo) {
+async function syncOnePromo(shop, token, promo, ctx = { freeSlots: [] }) {
   const code = String(promo.code).toUpperCase().trim();
   const isOrder = promo.discountLevel === "order";
   const isNone = promo.type === "none";
@@ -537,40 +538,29 @@ async function syncOnePromo(shop, token, promo) {
 
   let existing = await findCodeDiscount(shop, token, code);
 
-  // Promo codes created before the switch to ORDER class: recreate them.
-  if (existing && isOurPromoDiscount(existing) &&
-      !(existing.codeDiscount.discountClasses ?? []).every(c => c === "ORDER")) {
-    const del = await deletePromoDiscount(shop, token, code);
-    if (del) return del;
-    existing = null;
-  }
+  // App discounts are never deleted and recreated: Shopify blocks creating new
+  // ones on non-Plus stores, so every existing one is kept and updated in place.
 
   if (existing && !isOurPromoDiscount(existing)) {
     return `${code}: this code is already used by another discount in Shopify. Delete or rename that one first.`;
   }
 
-  // Codes made as normal Shopify discounts (no Plus): recreate them with the latest settings.
+  // Codes made as normal Shopify discounts (no Plus). Ones with no minimum stay
+  // normal codes (they work fine and don't use a slot). Ones with a minimum move
+  // into a free app slot, so only hats count; with no slot they are left as they are.
   if (existing && existing.codeDiscount.__typename !== "DiscountCodeApp") {
-    const del = await deletePromoDiscount(shop, token, code);
+    if (nativeSupported(config) && config.minQty === 0) {
+      const del = await deleteNativeDiscount(shop, token, existing.id, code);
+      if (del) return del;
+      return createNativePromo(shop, token, config, discountInput);
+    }
+    if (!ctx.freeSlots.length) return noSlotError(code);
+    const del = await deleteNativeDiscount(shop, token, existing.id, code);
     if (del) return del;
-    return createNativePromo(shop, token, config, discountInput);
+    existing = null;
   }
 
-  if (existing) {
-    const data = await gql(shop, token, `
-      mutation($id: ID!, $d: DiscountCodeAppInput!) {
-        discountCodeAppUpdate(id: $id, codeAppDiscount: $d) { userErrors { field message } }
-      }
-    `, { id: existing.id, d: discountInput });
-    const errs = data?.data?.discountCodeAppUpdate?.userErrors ?? data?.errors ?? [];
-    if (errs.length) return `${code}: ${errs[0].message}`;
-
-    const mf = await gql(shop, token, `
-      mutation($m: [MetafieldsSetInput!]!) { metafieldsSet(metafields: $m) { userErrors { field message } } }
-    `, { m: [{ ownerId: existing.id, ...configMetafield }] });
-    const mfErrs = mf?.data?.metafieldsSet?.userErrors ?? mf?.errors ?? [];
-    return mfErrs.length ? `${code}: ${mfErrs[0].message}` : null;
-  }
+  if (existing) return updateAppDiscount(shop, token, existing.id, discountInput, configMetafield, code);
 
   const data = await gql(shop, token, `
     mutation($d: DiscountCodeAppInput!) {
@@ -591,34 +581,128 @@ async function syncOnePromo(shop, token, promo) {
   });
   const errs = data?.data?.discountCodeAppCreate?.userErrors ?? data?.errors ?? [];
   if (errs.length && PLUS_ONLY_ERROR.test(String(errs[0].message))) {
-    console.log(`${code}: function discounts need Shopify Plus, creating a normal Shopify discount code instead`);
-    return createNativePromo(shop, token, config, discountInput);
+    // Not on Plus: reuse a free app slot (an old app discount that no code uses now).
+    const slot = ctx.freeSlots.shift();
+    if (slot) {
+      console.log(`${code}: reusing app discount slot ${slot.id}`);
+      return updateAppDiscount(shop, token, slot.id,
+        { ...discountInput, code, startsAt: new Date().toISOString() }, configMetafield, code);
+    }
+    // No slot left. A normal Shopify code is only safe with no minimum quantity,
+    // because Shopify counts add-ons toward an order discount's minimum.
+    if (nativeSupported(config) && config.minQty === 0) return createNativePromo(shop, token, config, discountInput);
+    return noSlotError(code);
   }
+  return errs.length ? `${code}: ${errs[0].message}` : null;
+}
+
+function nativeSupported(config) {
+  return config.type === "trackonly" || (config.type === "fixed" && config.discountLevel === "order");
+}
+
+function noSlotError(code) {
+  return `${code}: no free code slots left. Shopify only lets this store reuse the codes it already has. ` +
+    `Delete a code you no longer need (for example an expired one), then add ${code} again.`;
+}
+
+async function updateAppDiscount(shop, token, id, d, configMetafield, code) {
+  const data = await gql(shop, token, `
+    mutation($id: ID!, $d: DiscountCodeAppInput!) {
+      discountCodeAppUpdate(id: $id, codeAppDiscount: $d) { userErrors { field message } }
+    }
+  `, { id, d });
+  const errs = data?.data?.discountCodeAppUpdate?.userErrors ?? data?.errors ?? [];
+  if (errs.length) return `${code}: ${errs[0].message}`;
+  if (!configMetafield) return null;
+  const mf = await gql(shop, token, `
+    mutation($m: [MetafieldsSetInput!]!) { metafieldsSet(metafields: $m) { userErrors { field message } } }
+  `, { m: [{ ownerId: id, ...configMetafield }] });
+  const mfErrs = mf?.data?.metafieldsSet?.userErrors ?? mf?.errors ?? [];
+  return mfErrs.length ? `${code}: ${mfErrs[0].message}` : null;
+}
+
+// -- App discount slots ---------------------------------------------------
+//
+// On a non-Plus store Shopify blocks creating NEW app (function) discounts, but
+// still lets the app update the ones it already has. So app discounts are never
+// deleted: a removed promo code "parks" its discount as a free slot (expired,
+// random unusable code), and the next new promo code takes that slot over.
+// Parked slots show as "Promo code (Tier Pricing): free slot (do not delete)"
+// in Shopify admin.
+
+const SLOT_TITLE = PROMO_TITLE_PREFIX + "free slot (do not delete)";
+
+async function listOurAppDiscounts(shop, token) {
+  const out = [];
+  let after = null;
+  for (let page = 0; page < 10; page++) {
+    const data = await gql(shop, token, `
+      query($after: String) {
+        codeDiscountNodes(first: 100, after: $after) {
+          nodes { id codeDiscount { __typename ... on DiscountCodeApp { title codes(first: 1) { nodes { code } } } } }
+          pageInfo { hasNextPage endCursor }
+        }
+      }
+    `, { after });
+    const conn = data?.data?.codeDiscountNodes;
+    if (!conn) break;
+    for (const n of conn.nodes) {
+      const d = n.codeDiscount;
+      if (d?.__typename === "DiscountCodeApp" && String(d.title ?? "").startsWith(PROMO_TITLE_PREFIX)) {
+        out.push({ id: n.id, code: String(d.codes?.nodes?.[0]?.code ?? "").toUpperCase().trim() });
+      }
+    }
+    if (!conn.pageInfo.hasNextPage) break;
+    after = conn.pageInfo.endCursor;
+  }
+  return out;
+}
+
+async function findFreeSlots(shop, token, codes) {
+  const inUse = new Set(codes.map(c => String(c.code).toUpperCase().trim()));
+  return (await listOurAppDiscounts(shop, token)).filter(d => !inUse.has(d.code));
+}
+
+async function parkAppDiscount(shop, token, id, code) {
+  const slotCode = "TPSLOT-" + Math.random().toString(36).slice(2, 10).toUpperCase();
+  return updateAppDiscount(shop, token, id, {
+    title: SLOT_TITLE,
+    code: slotCode,
+    startsAt: "2020-01-01T00:00:00Z",
+    endsAt: "2020-01-02T00:00:00Z",
+  }, null, code);
+}
+
+async function deleteNativeDiscount(shop, token, id, code) {
+  const data = await gql(shop, token, `
+    mutation($id: ID!) { discountCodeDelete(id: $id) { userErrors { field message } } }
+  `, { id });
+  const errs = data?.data?.discountCodeDelete?.userErrors ?? data?.errors ?? [];
   return errs.length ? `${code}: ${errs[0].message}` : null;
 }
 
 async function deletePromoDiscount(shop, token, code) {
   const existing = await findCodeDiscount(shop, token, String(code).toUpperCase().trim());
   if (!existing || !isOurPromoDiscount(existing)) return null; // never touch discounts we didn't create
-  const data = await gql(shop, token, `
-    mutation($id: ID!) { discountCodeDelete(id: $id) { userErrors { field message } } }
-  `, { id: existing.id });
-  const errs = data?.data?.discountCodeDelete?.userErrors ?? data?.errors ?? [];
-  return errs.length ? `${code}: ${errs[0].message}` : null;
+  if (existing.codeDiscount.__typename === "DiscountCodeApp") return parkAppDiscount(shop, token, existing.id, code);
+  return deleteNativeDiscount(shop, token, existing.id, code);
 }
 
 async function syncPromoCodes(shop, token, codes, previousCodes = []) {
   const errors = [];
-  for (const promo of codes) {
-    const err = await syncOnePromo(shop, token, promo);
-    if (err) errors.push(err);
-  }
+  // Removed codes first, so their app slots are free for new codes in the same save.
   const keep = codes.map(c => String(c.code).toUpperCase().trim());
   for (const old of previousCodes) {
     const oldCode = String(old.code).toUpperCase().trim();
     if (keep.includes(oldCode)) continue;
     const err = await deletePromoDiscount(shop, token, oldCode);
     if (err) errors.push(err);
+  }
+  const ctx = { freeSlots: await findFreeSlots(shop, token, codes) };
+  errors.failedCodes = [];
+  for (const promo of codes) {
+    const err = await syncOnePromo(shop, token, promo, ctx);
+    if (err) { errors.push(err); errors.failedCodes.push(String(promo.code).toUpperCase().trim()); }
   }
   return errors;
 }
@@ -670,6 +754,14 @@ app.post("/api/promo-codes", async (req, res) => {
   const syncErrors = await syncPromoCodes(shop, token, codes, previousCodes);
   if (syncErrors.length) {
     console.log("Promo sync errors:", syncErrors);
+    // Keep the saved list in step with Shopify: removals already happened, and a
+    // new code that failed was not made, so leave it out of the list.
+    const before = new Set(previousCodes.map(c => String(c.code).toUpperCase().trim()));
+    const failedNew = new Set((syncErrors.failedCodes ?? []).filter(c => !before.has(c)));
+    const saved = codes.filter(c => !failedNew.has(String(c.code).toUpperCase().trim()));
+    await gql(shop, token, `
+      mutation($m: [MetafieldsSetInput!]!) { metafieldsSet(metafields: $m) { userErrors { field message } } }
+    `, { m: [{ ownerId: shopId, namespace: "custom", key: "promo_codes", type: "json", value: JSON.stringify(saved) }] });
     return res.json({ ok: false, error: syncErrors.join(" | ") });
   }
 

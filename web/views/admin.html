@@ -247,6 +247,7 @@
         <button class="btn-primary" id="saveBtn" onclick="savePromoCode()">Add Code</button>
         <button class="btn-secondary" id="cancelBtn" onclick="cancelEdit()" style="display:none">Cancel</button>
       </div>
+      <p id="slotNote" style="margin-top:10px;font-size:12px;color:#6d7175"></p>
 
       <hr class="section-divider">
 
@@ -437,6 +438,21 @@ async function loadPromoCodes() {
   const data = await res.json();
   promoCodes = data.codes || [];
   renderPromoCodes();
+  showSlots(data.freeSlots);
+}
+
+// Shopify only lets this store reuse its existing code slots (no Shopify Plus).
+function showSlots(n) {
+  const el = document.getElementById('slotNote');
+  if (!el || typeof n !== 'number') return;
+  el.textContent = 'Free code slots: ' + n + '. Each new code uses one slot. Deleting a code frees its slot for a new one.';
+}
+
+async function refreshSlots() {
+  try {
+    const data = await (await fetch('/api/promo-codes?shop=' + shop)).json();
+    showSlots(data.freeSlots);
+  } catch (e) {}
 }
 
 function renderPromoCodes() {
@@ -616,10 +632,12 @@ async function savePromoCode() {
     renderPromoCodes();
     cancelEdit();
     showToast(editingIndex >= 0 ? code + ' updated' : code + ' added', 'success');
+    refreshSlots();
     editingIndex = -1;
     document.getElementById('saveBtn').textContent = 'Add Code';
   } else {
     showToast(data.error || 'Failed to save', 'error');
+    loadPromoCodes();
   }
 }
 
@@ -633,14 +651,14 @@ async function deletePromoCode(index) {
     body: JSON.stringify({ codes: updated }),
   });
   const data = await res.json();
-  if (data.ok) { promoCodes = updated; renderPromoCodes(); showToast(code + ' deleted', 'success'); }
-  else showToast(data.error || 'Failed to delete', 'error');
+  if (data.ok) { promoCodes = updated; renderPromoCodes(); showToast(code + ' deleted', 'success'); refreshSlots(); }
+  else { showToast(data.error || 'Failed to delete', 'error'); loadPromoCodes(); }
 }
 
 function showToast(msg, type) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.className = 'toast ' + type + ' show';
-  setTimeout(() => t.className = 'toast ' + type, 3000);
+  setTimeout(() => t.className = 'toast ' + type, type === 'error' ? 10000 : 3000);
 }
 
 function onMinQtyChange() {
